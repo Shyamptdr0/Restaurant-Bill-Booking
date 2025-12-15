@@ -7,15 +7,27 @@ export async function initDB() {
   if (typeof window === 'undefined') return null;
   
   if (!db) {
-    db = await openDB("billing", {
-      version: 1,
-      upgrade(db) {
-        db.createObjectStore("pendingBills", { keyPath: "id" });
-        db.createObjectStore("pendingMenuItems", { keyPath: "id" });
-        db.createObjectStore("cachedMenuItems", { keyPath: "id" });
-        db.createObjectStore("cachedBills", { keyPath: "id" });
-      }
-    });
+    try {
+      db = await openDB("billing", 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains("pendingBills")) {
+            db.createObjectStore("pendingBills", { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains("pendingMenuItems")) {
+            db.createObjectStore("pendingMenuItems", { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains("cachedMenuItems")) {
+            db.createObjectStore("cachedMenuItems", { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains("cachedBills")) {
+            db.createObjectStore("cachedBills", { keyPath: "id" });
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Failed to open database:', error);
+      return null;
+    }
   }
   return db;
 }

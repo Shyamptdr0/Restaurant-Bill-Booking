@@ -159,14 +159,14 @@ export default function BillCustomize() {
                     <span className="font-medium">Burger</span>
                     <span className="text-gray-600 ml-2">x2</span>
                   </div>
-                  <span style={{ color: settings.textColor }}>$25.98</span>
+                  <span style={{ color: settings.textColor }}>₹25.98</span>
                 </div>
                 <div className="flex justify-between" style={{ textAlign: settings.itemAlignment }}>
                   <div>
                     <span className="font-medium">Pizza</span>
                     <span className="text-gray-600 ml-2">x1</span>
                   </div>
-                  <span style={{ color: settings.textColor }}>$15.99</span>
+                  <span style={{ color: settings.textColor }}>₹15.99</span>
                 </div>
               </div>
             </div>
@@ -176,17 +176,17 @@ export default function BillCustomize() {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>$41.97</span>
+                  <span>₹41.97</span>
                 </div>
                 {settings.showTax && (
                   <div className="flex justify-between">
                     <span>Tax:</span>
-                    <span>$3.36</span>
+                    <span>₹3.36</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total:</span>
-                  <span style={{ color: settings.primaryColor }}>$45.33</span>
+                  <span style={{ color: settings.primaryColor }}>₹45.33</span>
                 </div>
               </div>
             </div>

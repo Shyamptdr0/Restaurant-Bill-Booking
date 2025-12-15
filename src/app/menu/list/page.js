@@ -77,7 +77,7 @@ export default function MenuList() {
     if (!confirm('Are you sure you want to delete this item?')) return
 
     try {
-      const response = await fetch(`/api/menu-items?id=${id}`, {
+      const response = await fetch(`/api/menu-items?id=₹{id}`, {
         method: 'DELETE',
       })
 
@@ -230,7 +230,7 @@ export default function MenuList() {
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">{item.name}</TableCell>
                           <TableCell>{item.category}</TableCell>
-                          <TableCell>${item.price.toFixed(2)}</TableCell>
+                          <TableCell>₹{item.price.toFixed(2)}</TableCell>
                           <TableCell>{item.tax}%</TableCell>
                           <TableCell>
                             <Button
@@ -243,7 +243,7 @@ export default function MenuList() {
                           </TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
-                              <Link href={`/menu/add?edit=${item.id}`}>
+                              <Link href={`/menu/add?edit=₹{item.id}`}>
                                 <Button size="sm" variant="outline">
                                   <Edit className="h-4 w-4" />
                                 </Button>

@@ -117,7 +117,7 @@ export default function AddMenuItem() {
     if (!confirm('Are you sure you want to delete this item?')) return
 
     try {
-      const response = await fetch(`/api/menu-items?id=${id}`, {
+      const response = await fetch(`/api/menu-items?id=₹{id}`, {
         method: 'DELETE',
       })
 
@@ -226,7 +226,7 @@ export default function AddMenuItem() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="price">Price ($)</Label>
+                        <Label htmlFor="price">Price (₹)</Label>
                         <Input
                           id="price"
                           type="number"
@@ -313,8 +313,8 @@ export default function AddMenuItem() {
                           <div className="flex-1">
                             <h4 className="font-medium">{item.name}</h4>
                             <p className="text-sm text-gray-600">
-                              {item.category} • ${item.price.toFixed(2)}
-                              {item.tax > 0 && ` • ${item.tax}% tax`}
+                              {item.category} • ₹{item.price.toFixed(2)}
+                              {item.tax > 0 && ` • ₹${item.tax}% tax`}
                             </p>
                           </div>
                           <div className="flex items-center space-x-2">

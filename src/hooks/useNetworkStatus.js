@@ -120,12 +120,12 @@ export function useNetworkStatus() {
       // Show notification to user
       if (billSyncResult.synced.length > 0 || menuItemSyncResult.synced.length > 0) {
         const totalSynced = billSyncResult.synced.length + menuItemSyncResult.synced.length
-        showSyncNotification(`Successfully synced ${totalSynced} items`)
+        showSyncNotification(`Successfully synced ₹{totalSynced} items`)
       }
 
       if (billSyncResult.failed.length > 0 || menuItemSyncResult.failed.length > 0) {
         const totalFailed = billSyncResult.failed.length + menuItemSyncResult.failed.length
-        showSyncNotification(`${totalFailed} items failed to sync`, 'error')
+        showSyncNotification(`₹{totalFailed} items failed to sync`, 'error')
       }
     } catch (error) {
       console.error('Sync failed:', error)
@@ -138,7 +138,7 @@ export function useNetworkStatus() {
   const showSyncNotification = (message, type = 'success') => {
     // Create a simple notification (you can replace this with a toast library)
     const notification = document.createElement('div')
-    notification.className = `fixed top-4 right-4 p-4 rounded-lg text-white z-50 ${
+    notification.className = `fixed top-4 right-4 p-4 rounded-lg text-white z-50 ₹{
       type === 'success' ? 'bg-green-500' : 'bg-red-500'
     }`
     notification.textContent = message

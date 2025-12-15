@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Search, Eye, Printer, Calendar, DollarSign } from 'lucide-react'
+import { ArrowLeft, Search, Eye, Printer, Calendar, IndianRupee } from 'lucide-react'
 import Link from 'next/link'
 
 export default function BillHistory() {
@@ -159,10 +159,10 @@ export default function BillHistory() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <IndianRupee className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+                  <div className="text-2xl font-bold">₹{stats.totalRevenue.toFixed(2)}</div>
                   <p className="text-xs text-muted-foreground">
                     All time revenue
                   </p>
@@ -172,10 +172,10 @@ export default function BillHistory() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <IndianRupee className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">${stats.todayRevenue.toFixed(2)}</div>
+                  <div className="text-2xl font-bold">₹{stats.todayRevenue.toFixed(2)}</div>
                   <p className="text-xs text-muted-foreground">
                     Revenue generated today
                   </p>
@@ -263,7 +263,7 @@ export default function BillHistory() {
                             })}
                           </TableCell>
                           <TableCell className="font-semibold">
-                            ${parseFloat(bill.total_amount).toFixed(2)}
+                            ₹{parseFloat(bill.total_amount).toFixed(2)}
                           </TableCell>
                           <TableCell>
                             <span className="capitalize px-2 py-1 bg-gray-100 rounded text-sm">

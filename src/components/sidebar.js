@@ -8,7 +8,7 @@ import {
   LayoutDashboard,
   Utensils,
   PlusCircle,
-  Receipt,
+ IndianRupee,
   History,
   LogOut,
   ChefHat,
@@ -19,7 +19,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Add Menu Item', href: '/menu/add', icon: PlusCircle },
   { name: 'Menu List', href: '/menu/list', icon: Utensils },
-  { name: 'Create Bill', href: '/billing/create', icon: Receipt },
+  { name: 'Create Bill', href: '/billing/create', icon: IndianRupee }, // Changed from Receipt to IndianRupee
   { name: 'Bill History', href: '/billing/history', icon: History },
   { name: 'Print Settings', href: '/billing/customize', icon: Settings },
 ]
@@ -46,10 +46,10 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-50 border-r">
-      <div className="flex h-16 items-center px-6 border-b">
-        <div className="flex items-center space-x-2">
-          <ChefHat className="h-8 w-8 text-orange-600" />
-          <span className="text-xl font-bold text-gray-900">Restaurant POS</span>
+      <div className="flex h-20 items-center px-6 border-b">
+        <div className="flex items-center space-x-3">
+          <ChefHat className="h-10 w-10 text-orange-600" />
+          <span className="text-2xl font-bold text-gray-900">Restaurant POS</span>
         </div>
       </div>
       
@@ -61,13 +61,13 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                'flex items-center px-3 py-3 text-base font-medium rounded-md transition-colors',
                 isActive
                   ? 'bg-orange-100 text-orange-700 border-r-2 border-orange-600'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               )}
             >
-              <item.icon className="mr-3 h-5 w-5" />
+              <item.icon className="mr-3 h-6 w-6" />
               {item.name}
             </Link>
           )
@@ -78,9 +78,9 @@ export function Sidebar() {
         <Button
           onClick={handleLogout}
           variant="ghost"
-          className="w-full justify-start text-gray-600 hover:text-gray-900"
+          className="w-full justify-start text-gray-600 hover:text-gray-900 py-3 text-base font-medium"
         >
-          <LogOut className="mr-3 h-5 w-5" />
+          <LogOut className="mr-3 h-6 w-6" />
           Logout
         </Button>
       </div>

@@ -165,9 +165,9 @@ export default function PrintBill() {
             {/* Printable Bill Content */}
             <div className="max-w-2xl mx-auto">
               <Card className="print-break">
-                <CardContent className={`p-8 ${getFontSizeClass()}`} style={{ color: printSettings.textColor }}>
+                <CardContent className={`p-8 ₹{getFontSizeClass()}`} style={{ color: printSettings.textColor }}>
                   {/* Restaurant Header */}
-                  <div className={`mb-8 ${getAlignmentClass(printSettings.headerAlignment)}`}>
+                  <div className={`mb-8 ₹{getAlignmentClass(printSettings.headerAlignment)}`}>
                     {printSettings.showLogo && (
                       <div className="flex justify-center mb-4">
                         <div className="flex items-center space-x-2">
@@ -212,12 +212,12 @@ export default function PrintBill() {
                   <div className="mb-6">
                     <div className="space-y-2">
                       {billItems.map((item, index) => (
-                        <div key={index} className={`flex justify-between ${getAlignmentClass(printSettings.itemAlignment)}`}>
+                        <div key={index} className={`flex justify-between ₹{getAlignmentClass(printSettings.itemAlignment)}`}>
                           <div>
-                            <span className="font-medium">{item.menu_items?.name || `Item ${index + 1}`}</span>
+                            <span className="font-medium">{item.menu_items?.name || `Item ₹{index + 1}`}</span>
                             <span className="text-gray-600 ml-2">x{item.quantity}</span>
                           </div>
-                          <span>${(item.price * item.quantity).toFixed(2)}</span>
+                          <span>₹{(item.price * item.quantity).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -228,18 +228,18 @@ export default function PrintBill() {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
-                        <span>${parseFloat(bill.subtotal).toFixed(2)}</span>
+                        <span>₹{parseFloat(bill.subtotal).toFixed(2)}</span>
                       </div>
                       {printSettings.showTax && (
                         <div className="flex justify-between">
                           <span>Tax:</span>
-                          <span>${parseFloat(bill.tax_amount).toFixed(2)}</span>
+                          <span>₹{parseFloat(bill.tax_amount).toFixed(2)}</span>
                         </div>
                       )}
                       <div className="flex justify-between font-bold text-lg">
                         <span>Total:</span>
                         <span style={{ color: printSettings.primaryColor }}>
-                          ${parseFloat(bill.total_amount).toFixed(2)}
+                          ₹{parseFloat(bill.total_amount).toFixed(2)}
                         </span>
                       </div>
                     </div>

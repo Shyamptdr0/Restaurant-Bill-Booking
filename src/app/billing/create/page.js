@@ -259,7 +259,7 @@ export default function CreateBill() {
                               </Button>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="font-semibold">${item.price.toFixed(2)}</span>
+                              <span className="font-semibold">₹{item.price.toFixed(2)}</span>
                               {item.tax > 0 && (
                                 <span className="text-xs text-gray-500">{item.tax}% tax</span>
                               )}
@@ -321,7 +321,7 @@ export default function CreateBill() {
                                       </Button>
                                     </div>
                                   </TableCell>
-                                  <TableCell>${(item.price * item.quantity).toFixed(2)}</TableCell>
+                                  <TableCell>₹{(item.price * item.quantity).toFixed(2)}</TableCell>
                                   <TableCell>
                                     <Button
                                       size="sm"
@@ -341,15 +341,15 @@ export default function CreateBill() {
                         <div className="border-t pt-4 space-y-2">
                           <div className="flex justify-between">
                             <span>Subtotal:</span>
-                            <span>${calculateSubtotal().toFixed(2)}</span>
+                            <span>₹{calculateSubtotal().toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Tax:</span>
-                            <span>${calculateTax().toFixed(2)}</span>
+                            <span>₹{calculateTax().toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between font-bold text-lg">
                             <span>Total:</span>
-                            <span>${calculateTotal().toFixed(2)}</span>
+                            <span>₹{calculateTotal().toFixed(2)}</span>
                           </div>
                         </div>
 

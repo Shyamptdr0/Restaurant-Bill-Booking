@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Printer, Home } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ArrowLeft, Printer, Home, Settings, Save } from 'lucide-react'
 import Link from 'next/link'
 
 export default function PrintBill() {
@@ -15,6 +18,8 @@ export default function PrintBill() {
   const [billItems, setBillItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [printSettings, setPrintSettings] = useState({})
+  const [showCustomize, setShowCustomize] = useState(false)
+  const [tempSettings, setTempSettings] = useState({})
   const params = useParams()
   const router = useRouter()
   const billId = params.billId
@@ -40,12 +45,13 @@ export default function PrintBill() {
     } else {
       // Default settings
       setPrintSettings({
-        restaurantName: 'Restaurant POS',
+        restaurantName: 'Pram Mitra Family Restaurant',
         restaurantTagline: 'Delicious Food, Great Service',
-        address: '123 Main Street, City, State 12345',
-        phone: '(555) 123-4567',
+        address: 'mandleswar road dhargoan',
+        phone: '8085902662',
         email: 'info@restaurant.com',
         fontSize: 'medium',
+        paperSize: '80mm', // Thermal receipt size - most common for restaurants
         showLogo: true,
         showTax: true,
         showTimestamp: true,
@@ -86,6 +92,26 @@ export default function PrintBill() {
 
   const handleNewBill = () => {
     router.push('/billing/create')
+  }
+
+  const handleCustomize = () => {
+    setTempSettings({ ...printSettings })
+    setShowCustomize(true)
+  }
+
+  const handleSaveSettings = () => {
+    setPrintSettings(tempSettings)
+    localStorage.setItem('billPrintSettings', JSON.stringify(tempSettings))
+    setShowCustomize(false)
+  }
+
+  const handleCancelCustomize = () => {
+    setTempSettings({})
+    setShowCustomize(false)
+  }
+
+  const updateTempSetting = (key, value) => {
+    setTempSettings(prev => ({ ...prev, [key]: value }))
   }
 
   if (loading) {
@@ -135,6 +161,26 @@ export default function PrintBill() {
     }
   }
 
+  const getPaperSizeClass = () => {
+    switch (printSettings.paperSize) {
+      case '57mm': return 'max-w-[200px]' // 57mm thermal receipt
+      case '80mm': return 'max-w-[300px]' // 80mm thermal receipt (default)
+      case 'A4': return 'max-w-4xl' // A4 paper
+      case 'Letter': return 'max-w-4xl' // Letter paper
+      default: return 'max-w-[300px]' // Default to 80mm
+    }
+  }
+
+  const getPaperSizePadding = () => {
+    switch (printSettings.paperSize) {
+      case '57mm': return 'p-4' // Compact padding for 57mm
+      case '80mm': return 'p-6' // Standard padding for 80mm
+      case 'A4': return 'p-8' // Full padding for A4
+      case 'Letter': return 'p-8' // Full padding for Letter
+      default: return 'p-6' // Default to 80mm
+    }
+  }
+
   return (
     <AuthGuard>
       <div className="flex h-screen bg-gray-100">
@@ -150,6 +196,10 @@ export default function PrintBill() {
                   Back to Dashboard
                 </Link>
                 <div className="flex space-x-2">
+                  <Button onClick={handleCustomize} variant="outline" className="flex items-center">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Customize
+                  </Button>
                   <Button onClick={handlePrint} className="flex items-center">
                     <Printer className="h-4 w-4 mr-2" />
                     Print Bill
@@ -162,12 +212,187 @@ export default function PrintBill() {
               </div>
             </div>
 
+            {/* Customize Panel - Hidden when printing */}
+            {showCustomize && (
+              <div className="no-print mb-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Customize Print Settings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {/* Restaurant Information */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg">Restaurant Information</h3>
+                        <div>
+                          <Label htmlFor="restaurantName">Restaurant Name</Label>
+                          <Input
+                            id="restaurantName"
+                            value={tempSettings.restaurantName || ''}
+                            onChange={(e) => updateTempSetting('restaurantName', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="address">Address</Label>
+                          <Input
+                            id="address"
+                            value={tempSettings.address || ''}
+                            onChange={(e) => updateTempSetting('address', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="phone">Phone</Label>
+                          <Input
+                            id="phone"
+                            value={tempSettings.phone || ''}
+                            onChange={(e) => updateTempSetting('phone', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            value={tempSettings.email || ''}
+                            onChange={(e) => updateTempSetting('email', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Print Settings */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg">Print Settings</h3>
+                        <div>
+                          <Label htmlFor="paperSize">Paper Size</Label>
+                          <Select value={tempSettings.paperSize || '80mm'} onValueChange={(value) => updateTempSetting('paperSize', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select paper size" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="57mm">57mm - Thermal Receipt</SelectItem>
+                              <SelectItem value="80mm">80mm - Thermal Receipt</SelectItem>
+                              <SelectItem value="A4">A4 - Professional Invoice</SelectItem>
+                              <SelectItem value="Letter">Letter - Professional Invoice</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="fontSize">Font Size</Label>
+                          <Select value={tempSettings.fontSize || 'medium'} onValueChange={(value) => updateTempSetting('fontSize', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select font size" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="small">Small</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="large">Large</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="headerAlignment">Header Alignment</Label>
+                          <Select value={tempSettings.headerAlignment || 'center'} onValueChange={(value) => updateTempSetting('headerAlignment', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select alignment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left</SelectItem>
+                              <SelectItem value="center">Center</SelectItem>
+                              <SelectItem value="right">Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="itemAlignment">Item Alignment</Label>
+                          <Select value={tempSettings.itemAlignment || 'left'} onValueChange={(value) => updateTempSetting('itemAlignment', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select alignment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left</SelectItem>
+                              <SelectItem value="center">Center</SelectItem>
+                              <SelectItem value="right">Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Display Options */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg">Display Options</h3>
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="showLogo"
+                              checked={tempSettings.showLogo || false}
+                              onChange={(e) => updateTempSetting('showLogo', e.target.checked)}
+                            />
+                            <Label htmlFor="showLogo">Show Logo</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="showTax"
+                              checked={tempSettings.showTax || false}
+                              onChange={(e) => updateTempSetting('showTax', e.target.checked)}
+                            />
+                            <Label htmlFor="showTax">Show Tax</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="showTimestamp"
+                              checked={tempSettings.showTimestamp || false}
+                              onChange={(e) => updateTempSetting('showTimestamp', e.target.checked)}
+                            />
+                            <Label htmlFor="showTimestamp">Show Timestamp</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="showPaymentMethod"
+                              checked={tempSettings.showPaymentMethod || false}
+                              onChange={(e) => updateTempSetting('showPaymentMethod', e.target.checked)}
+                            />
+                            <Label htmlFor="showPaymentMethod">Show Payment Method</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="showWatermark"
+                              checked={tempSettings.showWatermark || false}
+                              onChange={(e) => updateTempSetting('showWatermark', e.target.checked)}
+                            />
+                            <Label htmlFor="showWatermark">Show Watermark</Label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 mt-6 pt-6 border-t">
+                      <Button onClick={handleSaveSettings} className="flex items-center">
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Settings
+                      </Button>
+                      <Button onClick={handleCancelCustomize} variant="outline">
+                        Cancel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Printable Bill Content */}
-            <div className="max-w-2xl mx-auto">
+            <div className={`${getPaperSizeClass()} mx-auto`}>
               <Card className="print-break">
-                <CardContent className={`p-8 ₹{getFontSizeClass()}`} style={{ color: printSettings.textColor }}>
+                <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()}`} style={{ color: printSettings.textColor }}>
                   {/* Restaurant Header */}
-                  <div className={`mb-8 ₹{getAlignmentClass(printSettings.headerAlignment)}`}>
+                  <div className={`mb-8 ${getAlignmentClass(printSettings.headerAlignment)}`}>
                     {printSettings.showLogo && (
                       <div className="flex justify-center mb-4">
                         <div className="flex items-center space-x-2">

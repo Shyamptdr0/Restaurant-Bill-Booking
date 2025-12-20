@@ -36,17 +36,13 @@ export default function CreateBill() {
 
   const fetchMenuItems = async () => {
     try {
-      const response = await fetch('/api/menu-items?status=active')
+      const response = await fetch('/api/menu-items')
       const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
-      
-      setMenuItems(result.data || [])
+      const menuItems = result.data || []
+      setMenuItems(menuItems)
       
       // Extract unique categories
-      const uniqueCategories = [...new Set(result.data?.map(item => item.category) || [])]
+      const uniqueCategories = [...new Set(menuItems?.map(item => item.category) || [])]
       setCategories(uniqueCategories)
     } catch (error) {
       console.error('Error fetching menu items:', error)
@@ -131,9 +127,7 @@ export default function CreateBill() {
 
       const response = await fetch('/api/bills', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subtotal,
           tax_amount: taxAmount,
@@ -144,7 +138,7 @@ export default function CreateBill() {
             quantity: item.quantity,
             price: item.price
           }))
-        }),
+        })
       })
 
       const result = await response.json()
@@ -154,7 +148,8 @@ export default function CreateBill() {
       }
 
       // Redirect to print page
-      router.push(`/billing/print/${result.data.id}`)
+      const billId = result.data.id
+      router.push(`/billing/print/${billId}`)
     } catch (error) {
       console.error('Error generating bill:', error)
       alert('Error generating bill: ' + error.message)
@@ -184,9 +179,9 @@ export default function CreateBill() {
           <Sidebar />
         </div>
         
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <Navbar />
-          <main className="flex-1 pt-16 p-4 lg:p-6 overflow-auto">
+          <main className="flex-1 p-4 lg:p-6 overflow-auto">
             <div className="mb-4 lg:mb-6">
               <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900 mb-2">
                 <ArrowLeft className="h-4 w-4 mr-2" />

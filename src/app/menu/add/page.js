@@ -25,6 +25,7 @@ const categories = [
 ]
 
 export default function AddMenuItem() {
+  const [menuItems, setMenuItems] = useState([])
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -32,10 +33,12 @@ export default function AddMenuItem() {
     tax: '0',
     status: 'active'
   })
-  const [menuItems, setMenuItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const router = useRouter()
+
+  // Debug: Log state changes
+  console.log('Add Menu: Current menuItems state:', menuItems)
 
   useEffect(() => {
     fetchMenuItems()
@@ -43,16 +46,16 @@ export default function AddMenuItem() {
 
   const fetchMenuItems = async () => {
     try {
+      console.log('Add Menu: Fetching menu items...')
       const response = await fetch('/api/menu-items')
+      console.log('Add Menu: Response status:', response.status)
       const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
-
+      console.log('Add Menu: API Response:', result)
       setMenuItems(result.data || [])
+      console.log('Add Menu: Menu items set:', result.data || [])
     } catch (error) {
-      console.error('Error fetching menu items:', error)
+      console.error('Add Menu: Error fetching menu items:', error)
+      setMenuItems([])
     }
   }
 
@@ -61,25 +64,28 @@ export default function AddMenuItem() {
     setLoading(true)
 
     try {
-      const url = editingItem ? '/api/menu-items' : '/api/menu-items'
-      const method = editingItem ? 'PUT' : 'POST'
-      
-      const body = editingItem 
+      const formDataWithId = editingItem 
         ? { ...formData, id: editingItem.id }
         : formData
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-
-      const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
+      if (editingItem) {
+        // Update existing item
+        const response = await fetch('/api/menu-items', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formDataWithId)
+        })
+        const result = await response.json()
+        if (result.error) throw new Error(result.error)
+      } else {
+        // Create new item
+        const response = await fetch('/api/menu-items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formDataWithId)
+        })
+        const result = await response.json()
+        if (result.error) throw new Error(result.error)
       }
 
       // Reset form
@@ -114,25 +120,25 @@ export default function AddMenuItem() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this item?')) return
+  if (!confirm('Are you sure you want to delete this item?')) return;
 
-    try {
-      const response = await fetch(`/api/menu-items?id=₹{id}`, {
-        method: 'DELETE',
-      })
+  try {
+    const response = await fetch(`/api/menu-items?id=${id}`, {
+      method: 'DELETE',
+    });
 
-      const result = await response.json()
+    const result = await response.json();
 
-      if (result.error) {
-        throw new Error(result.error)
-      }
-
-      await fetchMenuItems()
-    } catch (error) {
-      console.error('Error deleting menu item:', error)
-      alert('Error deleting menu item: ' + error.message)
+    if (result.error) {
+      throw new Error(result.error);
     }
+
+    await fetchMenuItems();
+  } catch (error) {
+    console.error('Error deleting menu item:', error);
+    alert('Error deleting menu item: ' + error.message);
   }
+};
 
   const toggleStatus = async (item) => {
     try {
@@ -169,9 +175,9 @@ export default function AddMenuItem() {
           <Sidebar />
         </div>
         
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <Navbar />
-          <main className="flex-1 pt-16 p-4 lg:p-6 overflow-auto">
+          <main className="flex-1 p-4 lg:p-6 overflow-auto">
             <div className="mb-4 lg:mb-6">
               <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900 mb-2">
                 <ArrowLeft className="h-4 w-4 mr-2" />

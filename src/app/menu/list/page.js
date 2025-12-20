@@ -33,11 +33,6 @@ export default function MenuList() {
     try {
       const response = await fetch('/api/menu-items')
       const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
-      
       setMenuItems(result.data || [])
       
       // Extract unique categories
@@ -45,6 +40,7 @@ export default function MenuList() {
       setCategories(uniqueCategories)
     } catch (error) {
       console.error('Error fetching menu items:', error)
+      setMenuItems([])
     } finally {
       setLoading(false)
     }
@@ -73,53 +69,53 @@ export default function MenuList() {
     setFilteredItems(filtered)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this item?')) return
+ const handleDelete = async (id) => {
+  if (!confirm('Are you sure you want to delete this item?')) return;
 
-    try {
-      const response = await fetch(`/api/menu-items?id=₹{id}`, {
-        method: 'DELETE',
-      })
+  try {
+    const response = await fetch(`/api/menu-items?id=${id}`, {
+      method: 'DELETE',
+    });
 
-      const result = await response.json()
+    const result = await response.json();
 
-      if (result.error) {
-        throw new Error(result.error)
-      }
-
-      await fetchMenuItems()
-    } catch (error) {
-      console.error('Error deleting menu item:', error)
-      alert('Error deleting menu item: ' + error.message)
+    if (result.error) {
+      throw new Error(result.error);
     }
+
+    await fetchMenuItems();
+  } catch (error) {
+    console.error('Error deleting menu item:', error);
+    alert('Error deleting menu item: ' + error.message);
   }
+};
 
   const toggleStatus = async (item) => {
-    try {
-      const newStatus = item.status === 'active' ? 'inactive' : 'active'
-      
-      const response = await fetch('/api/menu-items', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...item,
-          status: newStatus
-        }),
-      })
+  try {
+    const newStatus = item.status === 'active' ? 'inactive' : 'active';
+    
+    const response = await fetch('/api/menu-items', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...item,
+        status: newStatus
+      }),
+    });
 
-      const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
-
-      await fetchMenuItems()
-    } catch (error) {
-      console.error('Error toggling status:', error)
+    const result = await response.json();
+    
+    if (result.error) {
+      throw new Error(result.error);
     }
+
+    await fetchMenuItems();
+  } catch (error) {
+    console.error('Error toggling status:', error);
   }
+};
 
   if (loading) {
     return (
@@ -136,11 +132,15 @@ export default function MenuList() {
 
   return (
     <AuthGuard>
-      <div className="container mx-auto h-screen bg-gray-100">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+      <div className="flex h-screen bg-gray-100">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
+          <Sidebar />
+        </div>
+
+        <div className="flex flex-1 flex-col min-w-0">
           <Navbar />
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 p-4 lg:p-6 overflow-auto">
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
                 <div>

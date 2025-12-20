@@ -15,14 +15,14 @@ import Link from 'next/link'
 export default function BillCustomize() {
   const [settings, setSettings] = useState({
     // Restaurant Info
-    restaurantName: 'Restaurant POS',
+    restaurantName: 'Pram Mitra family Restaurant',
     restaurantTagline: 'Delicious Food, Great Service',
-    address: '123 Main Street, City, State 12345',
-    phone: '(555) 123-4567',
+    address: 'mandleswar road dhargoan',
+    phone: '8085902662',
     email: 'info@restaurant.com',
     
     // Print Settings
-    paperSize: 'A4',
+    paperSize: '80mm',
     orientation: 'portrait',
     fontSize: 'medium',
     showLogo: true,
@@ -210,9 +210,9 @@ export default function BillCustomize() {
           <Sidebar />
         </div>
         
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <Navbar />
-          <main className="flex-1 pt-16 p-4 lg:p-6 overflow-auto">
+          <main className="flex-1 p-4 lg:p-6 overflow-auto">
             {/* Header */}
             <div className="mb-4 lg:mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -306,9 +306,10 @@ export default function BillCustomize() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="A4">A4</SelectItem>
-                              <SelectItem value="Letter">Letter</SelectItem>
-                              <SelectItem value="Thermal">Thermal (80mm)</SelectItem>
+                              <SelectItem value="57mm">57mm - Thermal Receipt</SelectItem>
+                              <SelectItem value="80mm">80mm - Thermal Receipt</SelectItem>
+                              <SelectItem value="A4">A4 - Professional Invoice</SelectItem>
+                              <SelectItem value="Letter">Letter - Professional Invoice</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

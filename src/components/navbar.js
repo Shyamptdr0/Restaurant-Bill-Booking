@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { LogOut, User, Clock, Menu, LayoutDashboard, Utensils, PlusCircle, IndianRupee, History, Settings, ChefHat } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet.jsx'
 import { usePathname } from 'next/navigation'
@@ -105,7 +106,7 @@ export function Navbar() {
   )
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 px-4 lg:px-6 flex items-center justify-between fixed top-0 left-0 right-0 z-50">
+    <header className="h-16 bg-white border-b border-gray-200 px-4 lg:px-6 flex items-center justify-between flex-shrink-0">
       <div className="flex items-center space-x-2 lg:space-x-4">
         {/* Mobile menu button */}
         <div className="lg:hidden">
@@ -148,6 +149,7 @@ export function Navbar() {
             {user?.email || 'Guest'}
           </span>
         </div>
+        <Separator orientation="vertical" className="hidden sm:block h-6" />
         <Button
           onClick={handleLogout}
           variant="outline"

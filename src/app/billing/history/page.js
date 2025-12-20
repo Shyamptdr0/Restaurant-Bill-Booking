@@ -12,6 +12,17 @@ import { Navbar } from '@/components/navbar'
 import { ArrowLeft, Search, Eye, Printer, Calendar, IndianRupee } from 'lucide-react'
 import Link from 'next/link'
 
+
+const formatCurrency = (value) => {
+    if (value === null || value === undefined || isNaN(Number(value))) {
+      return '₹0.00'
+    }
+    return `₹${Number(value).toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+  }
+
 export default function BillHistory() {
   const [bills, setBills] = useState([])
   const [filteredBills, setFilteredBills] = useState([])
@@ -35,31 +46,34 @@ export default function BillHistory() {
 
   const fetchBills = async () => {
     try {
+      // Fetch bills using direct API call
       const response = await fetch('/api/bills')
       const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
+      const allBills = result.data || []
       
-      setBills(result.data || [])
+      setBills(allBills || [])
       
-      // Calculate stats
+      // Calculate stats from local bills
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       
-      const todayBills = result.data?.filter(bill => {
+      const todayBills = allBills?.filter(bill => {
         const billDate = new Date(bill.created_at)
         return billDate >= today
       }) || []
       
+      const todayRevenue = todayBills.reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
+      const totalRevenue = allBills?.reduce((sum, bill) => sum + (bill.total_amount || 0), 0) || 0
+      
       setStats({
-        totalBills: result.data?.length || 0,
-        totalRevenue: result.data?.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0) || 0,
-        todayRevenue: todayBills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+        totalBills: allBills?.length || 0,
+        totalRevenue: totalRevenue,
+        todayRevenue: todayRevenue
       })
+      
     } catch (error) {
       console.error('Error fetching bills:', error)
+      setBills([])
     } finally {
       setLoading(false)
     }
@@ -124,18 +138,21 @@ export default function BillHistory() {
       </AuthGuard>
     )
   }
+  if (!stats) {
+  return <div>Loading...</div>; // or any loading state
+}
 
   return (
     <AuthGuard>
-      <div className=" container mx-auto h-screen bg-gray-100">
+      <div className="flex h-screen bg-gray-100">
         {/* Desktop Sidebar */}
         <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
           <Sidebar />
         </div>
         
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <Navbar />
-          <main className="flex-1 pt-16 p-4 lg:p-6 overflow-auto">
+          <main className="flex-1 p-4 lg:p-6 overflow-auto">
             <div className="mb-4 lg:mb-6">
               <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900 mb-2">
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -166,7 +183,7 @@ export default function BillHistory() {
                   <IndianRupee className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹{stats.totalRevenue.toFixed(2)}</div>
+                  <div className="text-2xl font-bold">{formatCurrency(stats?.totalRevenue)}</div>
                   <p className="text-xs text-muted-foreground">
                     All time revenue
                   </p>
@@ -179,7 +196,7 @@ export default function BillHistory() {
                   <IndianRupee className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹{stats.todayRevenue.toFixed(2)}</div>
+                  <div className="text-2xl font-bold">{formatCurrency(stats?.todayRevenue)}</div>
                   <p className="text-xs text-muted-foreground">
                     Revenue generated today
                   </p>
@@ -270,7 +287,7 @@ export default function BillHistory() {
                               })}
                             </TableCell>
                             <TableCell className="font-semibold whitespace-nowrap">
-                              ₹{parseFloat(bill.total_amount).toFixed(2)}
+                              ₹{formatCurrency(bill.total_amount)}
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               <span className="capitalize px-2 py-1 bg-gray-100 rounded text-sm">

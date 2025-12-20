@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet.jsx'
 import {
   LayoutDashboard,
@@ -80,7 +81,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-3 border-t">
+      <Separator className="mx-3" />
+      
+      <div className="p-3">
         <Button
           onClick={handleLogout}
           variant="ghost"
@@ -96,7 +99,7 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+      <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
         <NavContent />
       </div>
 

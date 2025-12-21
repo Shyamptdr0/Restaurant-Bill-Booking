@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet.jsx'
 import {
   LayoutDashboard,
   Utensils,
@@ -16,7 +15,6 @@ import {
   LogOut,
   ChefHat,
   Settings,
-  Menu,
   X
 } from 'lucide-react'
 
@@ -30,7 +28,6 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -100,24 +97,6 @@ export function Sidebar() {
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
         <NavContent />
-      </div>
-
-      {/* Mobile Sidebar using Sheet */}
-      <div className="lg:hidden">
-        <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-white shadow-md h-10 w-10 p-0 flex items-center justify-center"
-            >
-              {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64">
-            <NavContent />
-          </SheetContent>
-        </Sheet>
       </div>
     </>
   )

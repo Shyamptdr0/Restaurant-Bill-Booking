@@ -15,7 +15,6 @@ const navigation = [
   { name: 'Menu List', href: '/menu/list', icon: Utensils },
   { name: 'Create Bill', href: '/billing/create', icon: IndianRupee },
   { name: 'Bill History', href: '/billing/history', icon: History },
-  { name: 'Print Settings', href: '/billing/customize', icon: Settings },
 ]
 
 export function Navbar() {

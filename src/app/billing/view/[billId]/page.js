@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Home, Settings, Save } from 'lucide-react'
+import { ArrowLeft, Printer, Home, Settings, Save } from 'lucide-react'
 import Link from 'next/link'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -180,22 +180,23 @@ export default function ViewBill() {
           <main className="flex-1 p-6 overflow-auto">
             {/* Control Buttons */}
             <div className="mb-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <Link href="/billing/history" className="flex items-center text-gray-600 hover:text-gray-900">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to History
                 </Link>
-                <div className="flex space-x-2">
-                  <Button onClick={handleCustomize} variant="outline" className="flex items-center">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button onClick={handleCustomize} variant="outline" className="flex items-center justify-center">
                     <Settings className="h-4 w-4 mr-2" />
                     Customize
                   </Button>
                   <Link href={`/billing/print/${billId}`}>
-                    <Button variant="outline" className="flex items-center">
+                    <Button variant="outline" className="flex items-center justify-center w-full bg-black text-white">
+                     <Printer className="h-4 w-4 mr-2" />
                       Print Bill
                     </Button>
                   </Link>
-                  <Button onClick={handleNewBill} variant="outline" className="flex items-center">
+                  <Button onClick={handleNewBill} variant="outline" className="flex items-center justify-center">
                     <Home className="h-4 w-4 mr-2" />
                     New Bill
                   </Button>
@@ -349,7 +350,7 @@ export default function ViewBill() {
             )}
 
             {/* Bill Content */}
-            <div className={`${getPaperSizeClass()} mx-auto`}>
+            <div className={`${getPaperSizeClass()} mx-auto max-w-full px-2 sm:px-0`}>
               <Card className="shadow-lg">
                 <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()}`} 
                            style={{ color: printSettings.textColor }}>

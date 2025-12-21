@@ -292,7 +292,7 @@ export default function BillHistory() {
                               })}
                             </TableCell>
                             <TableCell className="font-semibold whitespace-nowrap">
-                              ₹{formatCurrency(bill.total_amount)}
+                              {formatCurrency(bill.total_amount)}
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               <span className="capitalize px-2 py-1 bg-gray-100 rounded text-sm">

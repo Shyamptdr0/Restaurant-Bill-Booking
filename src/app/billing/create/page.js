@@ -100,8 +100,14 @@ export default function CreateBill() {
     setCart(cart.filter(item => item.id !== itemId))
   }
 
+  // Helper function to round up to next integer
+  const roundUpToNext = (amount) => {
+    return Math.ceil(amount)
+  }
+
   const calculateSubtotal = () => {
-    return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    return subtotal // No rounding for subtotal
   }
 
   const calculateTax = () => {
@@ -110,21 +116,21 @@ export default function CreateBill() {
       const sgstAmount = item.sgst ? (itemTotal * item.sgst / 100) : 0
       const cgstAmount = item.cgst ? (itemTotal * item.cgst / 100) : 0
       return sum + sgstAmount + cgstAmount
-    }, 0)
+    }, 0) // No rounding for tax
   }
 
   const calculateSgst = () => {
     return cart.reduce((sum, item) => {
       if (!item.sgst) return sum
       return sum + (item.price * item.quantity * item.sgst / 100)
-    }, 0)
+    }, 0) // No rounding for SGST
   }
 
   const calculateCgst = () => {
     return cart.reduce((sum, item) => {
       if (!item.cgst) return sum
       return sum + (item.price * item.quantity * item.cgst / 100)
-    }, 0)
+    }, 0) // No rounding for CGST
   }
 
   const calculateServiceTax = () => {
@@ -133,17 +139,18 @@ export default function CreateBill() {
     return cart.reduce((sum, item) => {
       const itemTotal = item.price * item.quantity
       return sum + (itemTotal * serviceTaxRate)
-    }, 0)
+    }, 0) // No rounding for service tax
   }
 
   const calculateServiceTaxPerItem = (item) => {
     const serviceTaxRate = 0.05
     const itemTotal = item.price * item.quantity
-    return itemTotal * serviceTaxRate
+    return itemTotal * serviceTaxRate // No rounding for service tax per item
   }
 
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax() + calculateServiceTax()
+    const total = calculateSubtotal() + calculateTax() + calculateServiceTax()
+    return roundUpToNext(total) // Only round the total amount
   }
 
   const generateBill = async () => {

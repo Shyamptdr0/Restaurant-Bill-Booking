@@ -199,21 +199,21 @@ export default function PrintBill() {
           <main className="flex-1 p-6 overflow-auto">
             {/* Control Buttons - Hidden when printing */}
             <div className="no-print mb-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Dashboard
                 </Link>
-                <div className="flex space-x-2">
-                  <Button onClick={handleCustomize} variant="outline" className="flex items-center">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button onClick={handleCustomize} variant="outline" className="flex items-center justify-center">
                     <Settings className="h-4 w-4 mr-2" />
                     Customize
                   </Button>
-                  <Button onClick={handlePrint} className="flex items-center">
+                  <Button onClick={handlePrint} className="flex items-center justify-center">
                     <Printer className="h-4 w-4 mr-2" />
                     Print Bill
                   </Button>
-                  <Button onClick={handleNewBill} variant="outline" className="flex items-center">
+                  <Button onClick={handleNewBill} variant="outline" className="flex items-center justify-center">
                     <Home className="h-4 w-4 mr-2" />
                     New Bill
                   </Button>
@@ -390,7 +390,7 @@ export default function PrintBill() {
             )}
 
             {/* Printable Bill Content */}
-            <div className={`${getPaperSizeClass()} mx-auto`}>
+            <div className={`${getPaperSizeClass()} mx-auto max-w-full px-2 sm:px-0`}>
               <Card className="print-break">
                 <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()}`} style={{ color: printSettings.textColor }}>
                   {/* Restaurant Header */}

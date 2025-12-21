@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ChefHat, Utensils } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -58,10 +57,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex items-center space-x-2">
-              <ChefHat className="h-8 w-8 text-orange-600" />
-              <Utensils className="h-6 w-6 text-red-600" />
-            </div>
+            <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto" />
           </div>
           <CardTitle className="text-xl lg:text-2xl font-bold text-gray-900">
             ParamMitra Restaurant

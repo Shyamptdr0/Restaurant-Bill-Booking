@@ -38,11 +38,14 @@ export default function CreateBill() {
     try {
       const response = await fetch('/api/menu-items')
       const result = await response.json()
-      const menuItems = result.data || []
-      setMenuItems(menuItems)
+      const allMenuItems = result.data || []
       
-      // Extract unique categories
-      const uniqueCategories = [...new Set(menuItems?.map(item => item.category) || [])]
+      // Filter out inactive items - only show active items in create bill
+      const activeMenuItems = allMenuItems.filter(item => item.status !== 'inactive')
+      setMenuItems(activeMenuItems)
+      
+      // Extract unique categories from active items
+      const uniqueCategories = [...new Set(activeMenuItems?.map(item => item.category) || [])]
       setCategories(uniqueCategories)
     } catch (error) {
       console.error('Error fetching menu items:', error)

@@ -101,7 +101,10 @@ export default function PrintBill() {
   }
 
   const handleCustomize = () => {
-    setTempSettings({ ...printSettings })
+    setTempSettings({ 
+      ...printSettings,
+      paperSize: printSettings.paperSize || '80mm' // Ensure paperSize is always set
+    })
     setShowCustomize(true)
   }
 
@@ -117,6 +120,7 @@ export default function PrintBill() {
   }
 
   const updateTempSetting = (key, value) => {
+    console.log('Updating setting:', key, 'to:', value);
     setTempSettings(prev => ({ ...prev, [key]: value }))
   }
 
@@ -154,8 +158,11 @@ export default function PrintBill() {
     )
   }
 
+  // Use tempSettings if customize panel is open, otherwise use saved printSettings
+  const currentSettings = showCustomize ? tempSettings : printSettings
+
   const getFontSizeClass = () => {
-    switch (printSettings.fontSize) {
+    switch (currentSettings.fontSize) {
       case 'small': return 'text-sm'
       case 'large': return 'text-lg'
       default: return 'text-base'
@@ -171,7 +178,12 @@ export default function PrintBill() {
   }
 
   const getPaperSizeClass = () => {
-    switch (printSettings.paperSize) {
+    const paperSize = currentSettings.paperSize || '80mm'; // Default to 80mm if undefined
+    console.log('Current paper size:', paperSize);
+    console.log('Current settings:', currentSettings);
+    console.log('Show customize:', showCustomize);
+    
+    switch (paperSize) {
       case '57mm': return 'max-w-[200px]' // 57mm thermal receipt
       case '80mm': return 'max-w-[300px]' // 80mm thermal receipt (default)
       case 'A4': return 'max-w-4xl' // A4 paper
@@ -181,7 +193,7 @@ export default function PrintBill() {
   }
 
   const getPaperSizePadding = () => {
-    switch (printSettings.paperSize) {
+    switch (currentSettings.paperSize) {
       case '57mm': return 'p-4' // Compact padding for 57mm
       case '80mm': return 'p-6' // Standard padding for 80mm
       case 'A4': return 'p-8' // Full padding for A4
@@ -390,24 +402,24 @@ export default function PrintBill() {
             )}
 
             {/* Printable Bill Content */}
-            <div className={`${getPaperSizeClass()} mx-auto max-w-full px-2 sm:px-0`}>
+            <div className={`${getPaperSizeClass()} mx-auto px-2 sm:px-0 print-only-content`}>
               <Card className="print-break">
-                <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()}`} style={{ color: printSettings.textColor }}>
+                <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()}`} style={{ color: currentSettings.textColor }}>
                   {/* Restaurant Header */}
-                  <div className={`mb-8 ${getAlignmentClass(printSettings.headerAlignment)}`}>
-                    {printSettings.showLogo && (
+                  <div className={`mb-8 ${getAlignmentClass(currentSettings.headerAlignment)}`}>
+                    {currentSettings.showLogo && (
                       <div className="flex justify-center mb-4">
                         <div className="flex items-center space-x-2">
                           <div>
-                            <h1 className="text-2xl font-bold">{printSettings.restaurantName}</h1>
-                            <p className="text-gray-600">{printSettings.restaurantTagline || 'Delicious Food, Great Service'}</p>
+                            <h1 className="text-2xl font-bold">{currentSettings.restaurantName}</h1>
+                            <p className="text-gray-600">{currentSettings.restaurantTagline || 'Delicious Food, Great Service'}</p>
                           </div>
                         </div>
                       </div>
                     )}
                     <div className="text-sm text-gray-600">
-                      <p>{printSettings.address}</p>
-                      <p>{printSettings.phone || '8085902662'} </p>
+                      <p>{currentSettings.address}</p>
+                      <p>{currentSettings.phone || '8085902662'} </p>
                     </div>
                   </div>
 
@@ -418,14 +430,14 @@ export default function PrintBill() {
                         <h2 className="text-xl font-bold">BILL</h2>
                         <p className="text-sm text-gray-600">Bill No: #{bill.bill_no}</p>
                       </div>
-                      {printSettings.showTimestamp && (
+                      {currentSettings.showTimestamp && (
                         <div className="text-right">
                           <p className="text-sm text-gray-600">Date: {new Date(bill.created_at).toLocaleDateString()}</p>
                           <p className="text-sm text-gray-600">Time: {new Date(bill.created_at).toLocaleTimeString()}</p>
                         </div>
                       )}
                     </div>
-                    {printSettings.showPaymentMethod && (
+                    {currentSettings.showPaymentMethod && (
                       <div className="mt-2">
                         <p className="text-sm text-gray-600">Payment: {bill.payment_type?.toUpperCase()}</p>
                       </div>
@@ -445,7 +457,7 @@ export default function PrintBill() {
                       </thead>
                       <tbody>
                         {billItems.map((item, index) => {
-                          const itemTotal = (item.price * item.quantity) + (item.sgst_amount || 0) + (item.cgst_amount || 0);
+                          const itemTotal = (item.price * item.quantity);
                           
                           return (
                             <tr key={index} className="border-b border-gray-100">
@@ -471,7 +483,7 @@ export default function PrintBill() {
                         <span>Subtotal:</span>
                         <span>₹{parseFloat(bill.subtotal).toFixed(2)}</span>
                       </div>
-                      {printSettings.showTax && (
+                      {currentSettings.showTax && (
                         <>
                           {bill.total_sgst > 0 && (
                             <div className="flex justify-between">
@@ -500,7 +512,7 @@ export default function PrintBill() {
                       <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between font-bold text-lg">
                           <span>Total:</span>
-                          <span style={{ color: printSettings.primaryColor }}>
+                          <span style={{ color: currentSettings.primaryColor }}>
                             ₹{parseFloat(bill.total_amount).toFixed(2)}
                           </span>
                         </div>
@@ -508,9 +520,9 @@ export default function PrintBill() {
                     </div>
                   </div>
 
-                  {printSettings.showWatermark && (
+                  {currentSettings.showWatermark && (
                     <div className="text-center mt-6 text-gray-400 text-sm">
-                      {printSettings.watermarkText}
+                      {currentSettings.watermarkText}
                     </div>
                   )}
                 </CardContent>

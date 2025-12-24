@@ -116,35 +116,36 @@
 
 /* Print Styles */
 @media print {
-  .no-print {
-    display: none !important;
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
   }
   
-  .print-break {
-    page-break-inside: avoid;
+  /* Show only the bill content and its children */
+  .print-only-content,
+  .print-only-content * {
+    visibility: visible;
   }
   
+  /* Position the bill content correctly */
+  .print-only-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  /* Ensure proper print formatting */
   body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  /* Hide sidebar and navbar when printing */
-  .flex.h-screen > .flex.h-full.w-64,
-  header.h-16 {
-    display: none !important;
-  }
-
-  /* Adjust layout for printing */
-  .flex.h-screen > .flex-1 {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
-  /* Ensure bill content fits on one page */
   .print-break {
     page-break-inside: avoid;
-    page-break-after: auto;
   }
 }
 

@@ -91,6 +91,8 @@ export default function TablesPage() {
 // import { Input } from '@/components/ui/input'
 // import { Label } from '@/components/ui/label'
 // import { Badge } from '@/components/ui/badge'
+// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 // import { AuthGuard } from '@/components/auth-guard'
 // import { Sidebar } from '@/components/sidebar'
 // import { Navbar } from '@/components/navbar'
@@ -100,10 +102,11 @@ export default function TablesPage() {
 //   const [tables, setTables] = useState([])
 //   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 //   const [editingTable, setEditingTable] = useState(null)
+//   const [selectedSection, setSelectedSection] = useState('')
 //   const [formData, setFormData] = useState({
 //     name: '',
-//     capacity: '',
-//     status: 'available'
+//     status: 'blank',
+//     section: ''
 //   })
 
 //   useEffect(() => {
@@ -125,6 +128,11 @@ export default function TablesPage() {
 //   const handleSubmit = async (e) => {
 //     e.preventDefault()
     
+//     if (!formData.section) {
+//       alert('Please select a section for the table')
+//       return
+//     }
+    
 //     const url = editingTable ? `/api/tables/${editingTable.id}` : '/api/tables'
 //     const method = editingTable ? 'PUT' : 'POST'
     
@@ -141,7 +149,8 @@ export default function TablesPage() {
 //         fetchTables()
 //         setIsAddModalOpen(false)
 //         setEditingTable(null)
-//         setFormData({ name: '', capacity: '', status: 'available' })
+//         setSelectedSection('')
+//         setFormData({ name: '', status: 'blank', section: '' })
 //       }
 //     } catch (error) {
 //       console.error('Error saving table:', error)
@@ -152,9 +161,16 @@ export default function TablesPage() {
 //     setEditingTable(table)
 //     setFormData({
 //       name: table.name,
-//       capacity: table.capacity,
-//       status: table.status
+//       status: table.status,
+//       section: table.section || ''
 //     })
+//     setIsAddModalOpen(true)
+//   }
+
+//   const handleAddTable = (section) => {
+//     setSelectedSection(section)
+//     setFormData({ name: '', status: 'blank', section })
+//     setEditingTable(null)
 //     setIsAddModalOpen(true)
 //   }
 
@@ -177,60 +193,25 @@ export default function TablesPage() {
 //   const getStatusColor = (status) => {
 //     switch (status) {
 //       case 'blank':
-//         return 'bg-gray-200 text-gray-800 border-gray-400'
+//         return 'bg-white text-gray-800 border-gray-300 hover:border-gray-400'
 //       case 'running':
-//         return 'bg-blue-200 text-blue-800 border-blue-400'
+//         return 'bg-blue-100 text-blue-800 border-blue-300 hover:border-blue-400'
 //       case 'printed':
-//         return 'bg-green-200 text-green-800 border-green-400'
+//         return 'bg-green-100 text-green-800 border-green-300 hover:border-green-400'
 //       case 'paid':
-//         return 'bg-yellow-200 text-yellow-800 border-yellow-400'
+//         return 'bg-amber-100 text-amber-800 border-amber-300 hover:border-amber-400'
 //       case 'running_kot':
-//         return 'bg-orange-200 text-orange-800 border-orange-400'
+//         return 'bg-orange-100 text-orange-800 border-orange-300 hover:border-orange-400'
 //       default:
-//         return 'bg-gray-200 text-gray-800 border-gray-400'
+//         return 'bg-white text-gray-800 border-gray-300 hover:border-gray-400'
 //     }
 //   }
 
-//   // Sample table data with sections and statuses
-//   const tableSections = [
-//     {
-//       name: 'Hole',
-//       tables: [
-//         { id: 1, name: 'Table 1', status: 'blank', capacity: 4 },
-//         { id: 2, name: 'Table 2', status: 'running', capacity: 4 },
-//         { id: 3, name: 'Table 3', status: 'printed', capacity: 2 },
-//         { id: 4, name: 'Table 4', status: 'blank', capacity: 4 },
-//         { id: 5, name: 'Table 5', status: 'paid', capacity: 6 },
-//         { id: 6, name: 'Table 6', status: 'running_kot', capacity: 4 },
-//         { id: 7, name: 'Table 7', status: 'blank', capacity: 4 },
-//         { id: 8, name: 'Table 8', status: 'running', capacity: 2 },
-//         { id: 9, name: 'Table 9', status: 'blank', capacity: 4 },
-//         { id: 10, name: 'Table 10', status: 'printed', capacity: 6 },
-//       ]
-//     },
-//     {
-//       name: 'Seperate',
-//       tables: [
-//         { id: 11, name: 'Table 11', status: 'blank', capacity: 4 },
-//         { id: 12, name: 'Table 12', status: 'running', capacity: 4 },
-//       ]
-//     },
-//     {
-//       name: 'Outside',
-//       tables: [
-//         { id: 13, name: 'S1', status: 'blank', capacity: 2 },
-//         { id: 14, name: 'S2', status: 'running', capacity: 2 },
-//         { id: 15, name: 'S3', status: 'blank', capacity: 4 },
-//         { id: 16, name: 'S4', status: 'printed', capacity: 2 },
-//         { id: 17, name: 'S5', status: 'paid', capacity: 6 },
-//       ]
-//     }
-//   ]
 
 //   return (
 //     <AuthGuard>
 //       <div className="flex h-screen bg-gray-100">
-//         {/* Desktop Sidebar */
+//          {/* Desktop Sidebar  */}
 //         <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
 //           <Sidebar />
 //         </div>
@@ -238,73 +219,162 @@ export default function TablesPage() {
 //         <div className="flex flex-1 flex-col min-w-0">
 //           <Navbar />
 
-//           <main className="flex-1 overflow-auto bg-gray-50">
-//             <div className="p-6">
+//           <main className="flex-1 overflow-auto bg-white">
+//             <div className="p-4">
+//               {/* Header */}
+//               <div className="flex justify-between items-center mb-6">
+//                 <h1 className="text-2xl font-semibold text-gray-800">Tables</h1>
+//                 <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+//                   <DialogTrigger asChild>
+//                     <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+//                       <Plus className="h-4 w-4 mr-2" />
+//                       Add Table
+//                     </Button>
+//                   </DialogTrigger>
+//                   <DialogContent className="sm:max-w-[450px] border-0 shadow-xl">
+//                     <DialogHeader>
+//                       <DialogTitle className="text-xl font-semibold text-gray-800">
+//                         {editingTable ? 'Edit Table' : 'Add New Table'}
+//                       </DialogTitle>
+//                     </DialogHeader>
+//                     <form onSubmit={handleSubmit} className="space-y-5">
+//                       <div>
+//                         <Label htmlFor="section" className="text-sm font-medium text-gray-700">Section</Label>
+//                         <Select 
+//                           value={formData.section} 
+//                           onValueChange={(value) => setFormData({...formData, section: value})}
+//                           disabled={!!selectedSection && !editingTable}
+//                         >
+//                           <SelectTrigger className="border-gray-300 h-11">
+//                             <SelectValue placeholder="Select section" />
+//                           </SelectTrigger>
+//                           <SelectContent>
+//                             <SelectItem value="Hole">Hole</SelectItem>
+//                             <SelectItem value="Seperate">Seperate</SelectItem>
+//                             <SelectItem value="Outside">Outside</SelectItem>
+//                           </SelectContent>
+//                         </Select>
+//                       </div>
+//                       <div>
+//                         <Label htmlFor="name" className="text-sm font-medium text-gray-700">Table Name</Label>
+//                         <Input
+//                           id="name"
+//                           value={formData.name}
+//                           onChange={(e) => setFormData({...formData, name: e.target.value})}
+//                           placeholder="e.g., Table 1, S1"
+//                           className="border-gray-300 h-11"
+//                           required
+//                         />
+//                       </div>
+//                       <div>
+//                         <Label htmlFor="status" className="text-sm font-medium text-gray-700">Status</Label>
+//                         <Select 
+//                           value={formData.status} 
+//                           onValueChange={(value) => setFormData({...formData, status: value})}
+//                         >
+//                           <SelectTrigger className="border-gray-300 h-11">
+//                             <SelectValue placeholder="Select status" />
+//                           </SelectTrigger>
+//                           <SelectContent>
+//                             <SelectItem value="blank">Blank</SelectItem>
+//                             <SelectItem value="running">Running</SelectItem>
+//                             <SelectItem value="printed">Printed</SelectItem>
+//                             <SelectItem value="paid">Paid</SelectItem>
+//                             <SelectItem value="running_kot">Running KOT</SelectItem>
+//                           </SelectContent>
+//                         </Select>
+//                       </div>
+//                       <div className="flex justify-end gap-3 pt-4">
+//                         <Button type="button" variant="outline" onClick={() => {
+//                           setIsAddModalOpen(false)
+//                           setEditingTable(null)
+//                           setSelectedSection('')
+//                           setFormData({ name: '', status: 'blank', section: '' })
+//                         }}>
+//                           Cancel
+//                         </Button>
+//                         <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+//                           {editingTable ? 'Update' : 'Add'} Table
+//                         </Button>
+//                       </div>
+//                     </form>
+//                   </DialogContent>
+//                 </Dialog>
+//               </div>
+              
 //               {/* Legend */}
-//               <div className="flex items-center justify-center mb-6 space-x-6">
+//               <div className="flex items-center justify-center mb-6 space-x-4 text-sm text-gray-600">
 //                 <div className="flex items-center gap-2">
-//                   <div className="w-4 h-4 bg-gray-200 border border-gray-400"></div>
-//                   <span className="text-sm">Blank Table</span>
+//                   <div className="w-4 h-4 bg-white border-2 border-gray-300 rounded"></div>
+//                   <span>Blank</span>
 //                 </div>
 //                 <div className="flex items-center gap-2">
-//                   <div className="w-4 h-4 bg-blue-200 border border-blue-400"></div>
-//                   <span className="text-sm">Running Table</span>
+//                   <div className="w-4 h-4 bg-blue-100 border-2 border-blue-300 rounded"></div>
+//                   <span>Running</span>
 //                 </div>
 //                 <div className="flex items-center gap-2">
-//                   <div className="w-4 h-4 bg-green-200 border border-green-400"></div>
-//                   <span className="text-sm">Printed Table</span>
+//                   <div className="w-4 h-4 bg-green-100 border-2 border-green-300 rounded"></div>
+//                   <span>Printed</span>
 //                 </div>
 //                 <div className="flex items-center gap-2">
-//                   <div className="w-4 h-4 bg-yellow-200 border border-yellow-400"></div>
-//                   <span className="text-sm">Paid Table</span>
+//                   <div className="w-4 h-4 bg-amber-100 border-2 border-amber-300 rounded"></div>
+//                   <span>Paid</span>
 //                 </div>
 //                 <div className="flex items-center gap-2">
-//                   <div className="w-4 h-4 bg-orange-200 border border-orange-400"></div>
-//                   <span className="text-sm">Running KOT Table</span>
+//                   <div className="w-4 h-4 bg-orange-100 border-2 border-orange-300 rounded"></div>
+//                   <span>Running KOT</span>
 //                 </div>
 //               </div>
 
 //               {/* Table Sections */}
-//               <div className="space-y-8">
-//                 {tableSections.map((section) => (
-//                   <div key={section.name} className="bg-white rounded-lg p-4 shadow-sm">
-//                     <h3 className="text-lg font-semibold mb-4 text-center">{section.name}</h3>
-//                     <div className="grid grid-cols-4 gap-6 max-w-5xl mx-auto">
-//                       {section.tables.map((table) => (
-//                         <div
-//                           key={table.id}
-//                           className={`relative aspect-square rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg hover:scale-105 flex items-center justify-center ${getStatusColor(
-//                             table.status
-//                           )}`}
-//                         >
-//                           <div className="text-center">
-//                             <div className="font-bold text-base">{table.name}</div>
-//                           </div>
-                          
-//                           {/* Action Icons */}
-//                           {table.status === 'running' && (
-//                             <div className="absolute top-1 right-1">
-//                               <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center">
-//                                 <span className="text-white text-xs">•</span>
-//                               </div>
+//               <div className="space-y-6">
+//                 {tables.length === 0 ? (
+//                   <div className="text-center py-12">
+//                     <p className="text-gray-500">No tables found. Add your first table to get started.</p>
+//                   </div>
+//                 ) : (
+//                   Object.entries(
+//                     tables.reduce((acc, table) => {
+//                       const section = table.section || 'Unassigned'
+//                       if (!acc[section]) {
+//                         acc[section] = []
+//                       }
+//                       acc[section].push(table)
+//                       return acc
+//                     }, {})
+//                   )).map(([sectionName, sectionTables]) => (
+//                     <div key={sectionName} className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+//                       <h3 className="text-base font-semibold text-gray-800 mb-4">{sectionName}</h3>
+//                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 max-w-full mx-auto">
+//                         {sectionTables.map((table) => (
+//                           <div
+//                             key={table.id}
+//                             className={`relative h-24 w-32 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-105 flex items-center justify-center ${getStatusColor(
+//                               table.status
+//                             )}`}
+//                           >
+//                             <div className="text-center">
+//                               <div className="text-sm font-semibold">{table.name}</div>
 //                             </div>
-//                           )}
                           
-//                           {table.status === 'printed' && (
-//                             <div className="absolute top-1 right-1">
-//                               <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
-//                                 <span className="text-white text-xs">✓</span>
+//                             {/* Status Indicators */}
+//                             {table.status === 'running' && (
+//                               <div className="absolute top-2 right-2">
+//                                 <div className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-sm"></div>
 //                               </div>
-//                             </div>
-//                           )}
-                          
-//                           {table.status === 'paid' && (
-//                             <div className="absolute top-1 right-1">
-//                               <div className="w-4 h-4 bg-yellow-600 rounded-full flex items-center justify-center">
-//                                 <span className="text-white text-xs">₹</span>
+//                             )}
+                            
+//                             {table.status === 'printed' && (
+//                               <div className="absolute top-2 right-2">
+//                                 <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
 //                               </div>
-//                             </div>
-//                           )}
+//                             )}
+                            
+//                             {table.status === 'paid' && (
+//                               <div className="absolute top-2 right-2">
+//                                 <div className="w-3 h-3 bg-amber-500 rounded-full border-2 border-white shadow-sm"></div>
+//                               </div>
+//                             )}
 //                         </div>
 //                       ))}
 //                     </div>

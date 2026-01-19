@@ -39,6 +39,18 @@ export default function PrintBill() {
     }
   }, [bill, loading, printSettings])
 
+  // Add keyboard shortcut for printing (Ctrl+P or Cmd+P)
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault()
+        handlePrint()
+      }
+    }
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [])
+
   const loadPrintSettings = () => {
     const savedSettings = localStorage.getItem('billPrintSettings')
     if (savedSettings) {
@@ -95,7 +107,10 @@ export default function PrintBill() {
   }
 
   const handlePrint = () => {
-    window.print()
+    // Ensure print dialog opens with proper settings
+    setTimeout(() => {
+      window.print()
+    }, 100)
   }
 
   const handleNewBill = () => {
@@ -165,11 +180,11 @@ export default function PrintBill() {
 
   const getFontSizeClass = () => {
     switch (currentSettings.paperSize) {
-      case '57mm': return 'text-xs' // Smaller font for 57mm
-      case '80mm': return 'text-xs' // Smaller font for 80mm to fit single page
-      case 'A4': return 'text-sm' // Small font for A4
-      case 'Letter': return 'text-sm' // Small font for Letter
-      default: return 'text-xs' // Default to smaller font
+      case '57mm': return 'text-sm' // Increased font for 57mm
+      case '80mm': return 'text-base' // Larger font for 80mm for much better readability
+      case 'A4': return 'text-lg' // Large font for A4
+      case 'Letter': return 'text-lg' // Large font for Letter
+      default: return 'text-base' // Default to larger readable font
     }
   }
 

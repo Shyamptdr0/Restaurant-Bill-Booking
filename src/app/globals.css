@@ -141,16 +141,16 @@
     overflow: hidden;
   }
   
-  /* Force single page printing - aggressive approach */
+  /* Force single page printing - larger fonts */
   body {
     margin: 0;
     padding: 0;
     background: white !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
-    font-size: 10px;
-    line-height: 1.1;
-    transform: scale(0.85);
+    font-size: 14px;
+    line-height: 1.3;
+    transform: scale(1.0);
     transform-origin: top left;
   }
 
@@ -198,7 +198,7 @@
   table {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    font-size: 9px !important;
+    font-size: 13px !important;
   }
 
   tr {
@@ -221,10 +221,21 @@
 
   /* Scale content to fit page */
   .print-only-content > div {
-    max-height: 90vh !important;
+    max-height: 95vh !important;
     overflow: hidden !important;
-    transform: scale(0.8);
+    transform: scale(0.95);
     transform-origin: top center;
+  }
+
+  /* Ensure text is black for printing */
+  .print-only-content * {
+    color: black !important;
+  }
+
+  /* Remove shadows and borders for cleaner print */
+  .print-only-content .card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
   }
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { Navbar } from '@/components/navbar'
 import { ArrowLeft, Plus, Minus, Search, Trash2, Receipt, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 
-export default function CreateBill() {
+function CreateBillContent() {
   const searchParams = useSearchParams()
   const tableId = searchParams.get('tableId')
   const tableName = searchParams.get('tableName')
@@ -547,5 +547,13 @@ export default function CreateBill() {
         </div>
       </div>
     </AuthGuard>
+  )
+}
+
+export default function CreateBill() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CreateBillContent />
+    </Suspense>
   )
 }

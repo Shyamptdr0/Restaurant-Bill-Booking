@@ -61,8 +61,8 @@ export default function BillHistory() {
         return billDate >= today
       }) || []
       
-      const todayRevenue = todayBills.reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
-      const totalRevenue = allBills?.reduce((sum, bill) => sum + (bill.total_amount || 0), 0) || 0
+      const todayRevenue = todayBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
+      const totalRevenue = allBills?.reduce((sum, bill) => sum + (bill.subtotal || 0), 0) || 0
       
       setStats({
         totalBills: allBills?.length || 0,
@@ -311,6 +311,7 @@ export default function BillHistory() {
                           <TableHead className="whitespace-nowrap">Bill No</TableHead>
                           <TableHead className="whitespace-nowrap">Date</TableHead>
                           <TableHead className="whitespace-nowrap">Time</TableHead>
+                          <TableHead className="whitespace-nowrap">Table</TableHead>
                           <TableHead className="whitespace-nowrap">Total</TableHead>
                           <TableHead className="whitespace-nowrap">Payment</TableHead>
                           <TableHead className="whitespace-nowrap">Actions</TableHead>
@@ -329,8 +330,11 @@ export default function BillHistory() {
                                 minute: '2-digit'
                               })}
                             </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {bill.table_name ? `${bill.table_name} (${bill.section})` : 'Parcel'}
+                            </TableCell>
                             <TableCell className="font-semibold whitespace-nowrap">
-                              {formatCurrency(bill.total_amount)}
+                              {formatCurrency(bill.subtotal)}
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               <span className="capitalize px-2 py-1 bg-gray-100 rounded text-sm">

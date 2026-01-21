@@ -458,37 +458,11 @@ export default function ViewBill() {
                         <span>Subtotal:</span>
                         <span>₹{parseFloat(bill.subtotal).toFixed(2)}</span>
                       </div>
-                      {currentSettings.showTax && (
-                        <>
-                          {bill.total_sgst > 0 && (
-                            <div className="flex justify-between">
-                              <span>SGST (2.5%):</span>
-                              <span>₹{parseFloat(bill.total_sgst).toFixed(2)}</span>
-                            </div>
-                          )}
-                          {bill.total_cgst > 0 && (
-                            <div className="flex justify-between">
-                              <span>CGST (2.5%):</span>
-                              <span>₹{parseFloat(bill.total_cgst).toFixed(2)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between font-medium">
-                            <span>Total Selling Tax:</span>
-                            <span>₹{((bill.total_sgst || 0) + (bill.total_cgst || 0)).toFixed(2)}</span>
-                          </div>
-                          {bill.service_tax_amount > 0 && (
-                            <div className="flex justify-between">
-                              <span>Service Charge (5%):</span>
-                              <span>₹{parseFloat(bill.service_tax_amount).toFixed(2)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
                       <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between font-bold text-lg">
                           <span>Total:</span>
                           <span style={{ color: 'black' }}>
-                            ₹{parseFloat(bill.total_amount).toFixed(2)}
+                            ₹{parseFloat(bill.subtotal).toFixed(2)}
                           </span>
                         </div>
                       </div>

@@ -103,33 +103,28 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = await params
 
-    // First check if there are any bills associated with this table
-    const { data: bills, error: billsError } = await withRetry(async () => {
+    // First, clear table_id references in bills to avoid foreign key constraint
+    // This preserves bill history but removes the table reference
+    const { error: updateError } = await withRetry(async () => {
       return await supabase
         .from('bills')
-        .select('id')
+        .update({ 
+          table_id: null,
+          table_name: null,
+          section: null
+        })
         .eq('table_id', id)
     })
 
-    if (billsError) {
-      console.error('Supabase error checking bills:', billsError)
-      return new Response(JSON.stringify({ error: billsError.message }), {
+    if (updateError) {
+      console.error('Supabase error updating bills:', updateError)
+      return new Response(JSON.stringify({ error: updateError.message }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    // If there are bills, don't allow deletion
-    if (bills && bills.length > 0) {
-      return new Response(JSON.stringify({ 
-        error: 'Cannot delete table with associated bills. Please settle or delete all bills first.' 
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    // If no bills, proceed with table deletion
+    // Now delete the table
     const { data, error } = await withRetry(async () => {
       return await supabase
         .from('tables')

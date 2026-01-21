@@ -24,7 +24,7 @@ const navigation = [
   { name: 'Add Menu Item', href: '/menu/add', icon: PlusCircle },
   { name: 'Menu List', href: '/menu/list', icon: Utensils },
   { name: 'Tables', href: '/tables', icon: Table },
-  // { name: 'Create Bill', href: '/billing/create', icon: IndianRupee }, // Changed from Receipt to IndianRupee
+  { name: 'Create Parcel Bill', href: '/billing/parcel', icon: IndianRupee },
   { name: 'Bill History', href: '/billing/history', icon: History },
   
 ]

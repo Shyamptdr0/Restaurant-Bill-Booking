@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Plus, Minus, Search, Trash2, Receipt, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, Search, Trash2, Receipt, RotateCcw, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 function CreateBillContent() {
@@ -30,6 +31,7 @@ function CreateBillContent() {
   const [paymentType, setPaymentType] = useState('cash')
   const [loading, setLoading] = useState(false)
   const [loadingItems, setLoadingItems] = useState(true)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -210,11 +212,11 @@ function CreateBillContent() {
     return roundUpToNext(total) // Only round the total amount
   }
 
-  const resetTable = async () => {
-    if (!confirm('Are you sure you want to reset this table? This will clear all items and reset table to blank status.')) {
-      return
-    }
+  const resetTable = () => {
+    setIsResetConfirmOpen(true)
+  }
 
+  const confirmResetTable = async () => {
     setLoading(true)
     try {
       // Clear temporary items from localStorage
@@ -261,6 +263,7 @@ function CreateBillContent() {
       alert('Failed to reset table')
     } finally {
       setLoading(false)
+      setIsResetConfirmOpen(false)
     }
   }
 
@@ -545,6 +548,38 @@ function CreateBillContent() {
             </div>
           </main>
         </div>
+
+        {/* Reset Confirmation Dialog */}
+        <Dialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+          <DialogContent className="sm:max-w-[350px] border-0 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold text-gray-800">
+                Reset Table Confirmation
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-gray-700">Are you sure you want to reset this table?</p>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsResetConfirmOpen(false)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmResetTable}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={loading}
+                >
+                  {loading ? 'Resetting...' : 'Reset Table'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AuthGuard>
   )

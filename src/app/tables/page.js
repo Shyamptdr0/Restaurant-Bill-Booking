@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { Plus, Edit2, Trash2, Users, Utensils, Receipt, CreditCard } from 'lucide-react'
+import { Plus, Edit2, Trash2, Users, Utensils, Receipt, CreditCard, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function TablesPage() {
@@ -19,6 +19,7 @@ export default function TablesPage() {
   const [tables, setTables] = useState([])
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isActionModalOpen, setIsActionModalOpen] = useState(false)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const [editingTable, setEditingTable] = useState(null)
   const [selectedTable, setSelectedTable] = useState(null)
   const [selectedSection, setSelectedSection] = useState('')
@@ -204,7 +205,11 @@ export default function TablesPage() {
     }
   }
 
-  const handleResetTable = async () => {
+  const handleResetTable = () => {
+    setIsResetConfirmOpen(true)
+  }
+
+  const confirmResetTable = async () => {
     if (selectedTable) {
       try {
         await fetch(`/api/tables/${selectedTable.id}`, {
@@ -219,6 +224,7 @@ export default function TablesPage() {
         
         fetchTables()
         setIsActionModalOpen(false)
+        setIsResetConfirmOpen(false)
       } catch (error) {
         console.error('Error resetting table:', error)
       }
@@ -240,6 +246,10 @@ export default function TablesPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'paid' })
             })
+            
+            // Clear temporary items from localStorage
+            const tempKey = `temp_items_${selectedTable.id}`
+            localStorage.removeItem(tempKey)
             
             // Update table status to blank (available for new customers)
             await fetch(`/api/tables/${selectedTable.id}`, {
@@ -581,6 +591,49 @@ export default function TablesPage() {
               >
                 Cancel
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Confirmation Dialog */}
+        <Dialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+          <DialogContent className="sm:max-w-[400px] border-0 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                Reset Table Confirmation
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-amber-800 font-medium mb-2">Are you sure you want to reset this table?</p>
+                <div className="text-sm text-amber-700 space-y-1">
+                  <p>• Table: <span className="font-semibold">{selectedTable?.name}</span></p>
+                  <p>• Section: <span className="font-semibold">{selectedTable?.section}</span></p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-sm text-gray-600">
+                  This action will reset the table status to <span className="font-semibold">"Blank"</span> and make it available for new customers.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsResetConfirmOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmResetTable}
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  Reset Table
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

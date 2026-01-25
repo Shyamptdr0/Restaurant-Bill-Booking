@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Search, Eye, Printer, Calendar, IndianRupee, Trash2 } from 'lucide-react'
+import { ArrowLeft, Search, Eye, Printer, Calendar, IndianRupee, Trash2, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
 
@@ -32,7 +33,10 @@ export default function BillHistory() {
   const [searchTerm, setSearchTerm] = useState('')
   const [paymentFilter, setPaymentFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
+  const [tableFilter, setTableFilter] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [billToDelete, setBillToDelete] = useState(null)
   const [stats, setStats] = useState({
     totalBills: 0,
     totalRevenue: 0,
@@ -98,7 +102,7 @@ export default function BillHistory() {
 
   useEffect(() => {
     filterBills()
-  }, [bills, searchTerm, paymentFilter, dateFilter])
+  }, [bills, searchTerm, paymentFilter, dateFilter, tableFilter])
 
   const filterBills = () => {
     let filtered = bills
@@ -113,6 +117,14 @@ export default function BillHistory() {
     // Payment type filter
     if (paymentFilter !== 'all') {
       filtered = filtered.filter(bill => bill.payment_type === paymentFilter)
+    }
+
+    // Table filter
+    if (tableFilter !== 'all') {
+      filtered = filtered.filter(bill => {
+        const tableInfo = bill.table_name ? `${bill.table_name} (${bill.section})` : 'Parcel'
+        return tableInfo.toLowerCase().includes(tableFilter.toLowerCase())
+      })
     }
 
     // Date filter
@@ -143,14 +155,31 @@ export default function BillHistory() {
     setFilteredBills(filtered)
   }
 
+  const getTableOptions = () => {
+    const tableSet = new Set()
+    bills.forEach(bill => {
+      if (bill.table_name) {
+        tableSet.add(`${bill.table_name} (${bill.section})`)
+      } else {
+        tableSet.add('Parcel')
+      }
+    })
+    return Array.from(tableSet).sort()
+  }
+
   const handlePrint = (billId) => {
     router.push(`/billing/print/${billId}`)
   }
 
-  const handleDelete = async (billId, billNo) => {
-    if (confirm(`Are you sure you want to delete Bill #${billNo}? This action cannot be undone.`)) {
+  const handleDelete = (billId, billNo) => {
+    setBillToDelete({ id: billId, no: billNo })
+    setIsDeleteConfirmOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (billToDelete) {
       try {
-        const response = await fetch(`/api/bills/${billId}`, {
+        const response = await fetch(`/api/bills/${billToDelete.id}`, {
           method: 'DELETE',
         })
         
@@ -163,6 +192,9 @@ export default function BillHistory() {
       } catch (error) {
         console.error('Error deleting bill:', error)
         alert('Error deleting bill: ' + error.message)
+      } finally {
+        setIsDeleteConfirmOpen(false)
+        setBillToDelete(null)
       }
     }
   }
@@ -263,8 +295,8 @@ export default function BillHistory() {
               </div>
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger className="w-full sm:w-40 lg:w-48 text-sm lg:text-base">
-                    <SelectValue placeholder="Filter by payment" />
+                  <SelectTrigger className="w-full sm:w-32 lg:w-36 text-sm lg:text-base">
+                    <SelectValue placeholder="Payment" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Payments</SelectItem>
@@ -273,9 +305,22 @@ export default function BillHistory() {
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={tableFilter} onValueChange={setTableFilter}>
+                  <SelectTrigger className="w-full sm:w-32 lg:w-36 text-sm lg:text-base">
+                    <SelectValue placeholder="Table" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tables</SelectItem>
+                    {getTableOptions().map((table) => (
+                      <SelectItem key={table} value={table}>
+                        {table}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={dateFilter} onValueChange={setDateFilter}>
-                  <SelectTrigger className="w-full sm:w-40 lg:w-48 text-sm lg:text-base">
-                    <SelectValue placeholder="Filter by date" />
+                  <SelectTrigger className="w-full sm:w-32 lg:w-36 text-sm lg:text-base">
+                    <SelectValue placeholder="Date" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Time</SelectItem>
@@ -377,6 +422,38 @@ export default function BillHistory() {
             </Card>
           </main>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+          <DialogContent className="sm:max-w-[350px] border-0 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold text-gray-800">
+                Delete Bill Confirmation
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-gray-700">
+                Are you sure you want to delete Bill #{billToDelete?.no}? This action cannot be undone.
+              </p>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsDeleteConfirmOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmDelete}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Delete Bill
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AuthGuard>
   )

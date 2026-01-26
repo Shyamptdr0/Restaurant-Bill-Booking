@@ -64,14 +64,28 @@ export function useRealtimeItemsSync(tableId, onItemsUpdate) {
             const data = await response.json()
             
             if (data.data && data.data.length > 0) {
-              // Convert to cart format
-              const currentItems = data.data.map(item => ({
-                id: item.item_id,
-                name: item.item_name,
-                category: item.item_category,
-                price: item.price,
-                quantity: item.quantity
-              }))
+              // Group items by item_id to handle potential duplicates (same logic as fetchTemporaryItems)
+              const groupedItems = {}
+              data.data.forEach(item => {
+                const itemId = item.item_id
+                if (groupedItems[itemId]) {
+                  // If item already exists, add quantity
+                  groupedItems[itemId].quantity += item.quantity
+                } else {
+                  // Create new item entry with unique identifier
+                  groupedItems[itemId] = {
+                    cartId: `${itemId}_${Date.now()}_${Math.random()}`, // Unique identifier for cart
+                    id: item.item_id,
+                    name: item.item_name,
+                    category: item.item_category,
+                    price: item.price,
+                    quantity: item.quantity
+                  }
+                }
+              })
+              
+              // Convert grouped items back to array
+              const currentItems = Object.values(groupedItems)
               
               // Only update if items actually changed (prevent unnecessary re-renders)
               const itemsChanged = JSON.stringify(currentItems) !== JSON.stringify(lastItemsRef.current)

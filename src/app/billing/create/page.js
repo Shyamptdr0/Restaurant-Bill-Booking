@@ -46,10 +46,13 @@ function CreateBillContent() {
     filterItems()
   }, [menuItems, searchTerm, categoryFilter])
 
-  // Real-time synchronization - fetch latest items from other devices
-  useRealtimeItemsSync(tableId, (updatedItems) => {
-    setCart(updatedItems)
-  })
+  // Real-time synchronization - temporarily disabled to fix duplicate issues
+  // useRealtimeItemsSync(tableId, (updatedItems) => {
+  //   // Only update cart if it's not a local update (to prevent interference)
+  //   if (!isLocalUpdate) {
+  //     setCart(updatedItems)
+  //   }
+  // })
 
   const fetchTemporaryItems = async () => {
     try {
@@ -128,6 +131,7 @@ function CreateBillContent() {
     const existingItem = cart.find(cartItem => cartItem.id === item.id)
     
     if (existingItem) {
+      // Update existing item quantity, keep the same cartId
       const newCart = cart.map(cartItem =>
         cartItem.id === item.id
           ? { ...cartItem, quantity: cartItem.quantity + 1 }
@@ -136,6 +140,7 @@ function CreateBillContent() {
       setCart(newCart)
       syncToDatabase(newCart)
     } else {
+      // Add new item with unique cartId
       const newCart = [...cart, { 
         ...item, 
         quantity: 1,

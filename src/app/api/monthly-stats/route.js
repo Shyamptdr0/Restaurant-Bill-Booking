@@ -36,7 +36,7 @@ export async function GET(request) {
     if (billsError) throw billsError
 
     // Calculate metrics
-    const totalRevenue = bills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+    const totalRevenue = bills.reduce((sum, bill) => sum + parseFloat(bill.subtotal || 0), 0)
     const totalBills = bills.length
     const uniqueCustomers = totalBills // Use total bills as customer count since customer_id doesn't exist
     const avgOrderValue = totalBills > 0 ? totalRevenue / totalBills : 0
@@ -50,13 +50,13 @@ export async function GET(request) {
 
     const { data: prevBills, error: prevError } = await supabase
       .from('bills')
-      .select('total_amount')
+      .select('subtotal')
       .gte('created_at', prevMonthStart.toISOString())
       .lte('created_at', prevMonthEnd.toISOString())
 
     let growth = 0
     if (!prevError && prevBills && prevBills.length > 0) {
-      const prevRevenue = prevBills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+      const prevRevenue = prevBills.reduce((sum, bill) => sum + parseFloat(bill.subtotal || 0), 0)
       growth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0
     }
 

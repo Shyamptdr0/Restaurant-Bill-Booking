@@ -40,6 +40,7 @@ import {
   Settings,
   TrendingUp as TrendingIcon,
   Eye,
+  EyeOff,
   Package,
   Star,
   Award,
@@ -152,7 +153,7 @@ const generateWeeklySalesFallback = (allBills = []) => {
     const daySales = allBills.filter(bill => {
       const billDate = new Date(bill.created_at)
       return billDate >= date && billDate <= dateEnd
-    }).reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
+    }).reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
     
     weeklySales.push({
       day: days[date.getDay()],
@@ -215,6 +216,7 @@ export default function Dashboard() {
   const [showAlerts, setShowAlerts] = useState(false)
   const [customerInsights, setCustomerInsights] = useState({})
   const [performanceMetrics, setPerformanceMetrics] = useState({})
+  const [showMonthlyRevenue, setShowMonthlyRevenue] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
@@ -273,7 +275,7 @@ export default function Dashboard() {
       )
       console.log('Dashboard: Today bills:', todayBills)
 
-      const todaySales = todayBills.reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
+      const todaySales = todayBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
       const totalItems = currentMonthBills.reduce((sum, bill) => sum + (bill.items?.length || 0), 0)
       console.log('Dashboard: Today sales:', todaySales, 'Total items:', totalItems)
 
@@ -548,10 +550,10 @@ export default function Dashboard() {
     
     const todaySales = allBills.filter(bill => 
       new Date(bill.created_at) >= today
-    ).reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
+    ).reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
     
     const avgDailySales = allBills.length > 0 ? 
-      allBills.reduce((sum, bill) => sum + (bill.total_amount || 0), 0) / Math.max(allBills.length / 30, 1) : 0
+      allBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0) / Math.max(allBills.length / 30, 1) : 0
     
     // Low sales alert
     if (todaySales < avgDailySales * 0.5) {
@@ -608,7 +610,7 @@ export default function Dashboard() {
     
     // Calculate average order value
     insights.averageOrderValue = allBills.length > 0 ?
-      allBills.reduce((sum, bill) => sum + (bill.total_amount || 0), 0) / allBills.length : 0
+      allBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0) / allBills.length : 0
     
     // Analyze peak hours
     const hourlySales = {}
@@ -651,8 +653,8 @@ export default function Dashboard() {
       return billDate >= twoWeeksAgo && billDate < weekAgo
     })
     
-    const thisWeekRevenue = thisWeek.reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
-    const lastWeekRevenue = lastWeek.reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
+    const thisWeekRevenue = thisWeek.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
+    const lastWeekRevenue = lastWeek.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
     
     metrics.revenueGrowth = lastWeekRevenue > 0 ? 
       ((thisWeekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100 : 0
@@ -668,7 +670,7 @@ export default function Dashboard() {
     const dailyTarget = 5000 // ₹5000 daily target
     const todayRevenue = allBills.filter(bill => 
       new Date(bill.created_at).toDateString() === new Date().toDateString()
-    ).reduce((sum, bill) => sum + (bill.total_amount || 0), 0)
+    ).reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
     
     metrics.targetAchievement = (todayRevenue / dailyTarget) * 100
     
@@ -806,7 +808,7 @@ export default function Dashboard() {
                           String(billDate.getMonth() + 1).padStart(2, '0') + '-' + 
                           String(billDate.getDate()).padStart(2, '0')
                         return billDateStr === dateStr
-                      }).reduce((sum, bill) => sum + (bill.total_amount || 0), 0) || 0
+                      }).reduce((sum, bill) => sum + (bill.subtotal || 0), 0) || 0
                       
                       if (!isCurrentMonth) {
                         return <div key={index} className="p-2" />
@@ -830,7 +832,7 @@ export default function Dashboard() {
                             setDailyData({
                               date: dateStr,
                               bills: dayBills,
-                              totalSales: dayBills.reduce((sum, bill) => sum + (bill.total_amount || 0), 0),
+                              totalSales: dayBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0),
                               totalBills: dayBills.length
                             })
                             setShowDailyDetails(true)
@@ -914,7 +916,7 @@ export default function Dashboard() {
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="font-semibold text-green-600">
-                                  {formatCurrency(bill.total_amount)}
+                                  {formatCurrency(bill.subtotal)}
                                 </span>
                                 <span className="px-2 py-1 bg-gray-100 rounded text-sm capitalize">
                                   {formatPaymentType(bill.payment_type)}
@@ -941,9 +943,12 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
               <SummaryCard
                 title="Monthly Revenue"
-                value={formatCurrency(monthly?.revenue)}
+                value={showMonthlyRevenue ? formatCurrency(monthly?.revenue) : '••••••'}
                 icon={IndianRupee}
                 growth={monthly?.growth}
+                showToggle={true}
+                isHidden={!showMonthlyRevenue}
+                onToggle={() => setShowMonthlyRevenue(!showMonthlyRevenue)}
               />
               <SummaryCard
                 title="Total Bills"
@@ -1023,13 +1028,28 @@ export default function Dashboard() {
 
 /* ---------------------- SMALL COMPONENTS ---------------------- */
 
-function SummaryCard({ title, value, icon: Icon, growth }) {
+function SummaryCard({ title, value, icon: Icon, growth, showToggle, isHidden, onToggle }) {
   return (
-    <Card>
+    <Card className={showToggle ? 'cursor-pointer' : ''}>
       <CardContent className="space-y-2 p-5">
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-600">{title}</p>
-          <Icon className="h-5 w-5 text-muted-foreground" />
+          <div className="flex items-center gap-2">
+            {showToggle && (
+              <button
+                onClick={onToggle}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                aria-label={isHidden ? 'Show amount' : 'Hide amount'}
+              >
+                {isHidden ? (
+                  <EyeOff className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <Eye className="h-4 w-4 text-gray-500" />
+                )}
+              </button>
+            )}
+            <Icon className="h-5 w-5 text-muted-foreground" />
+          </div>
         </div>
 
         <h3 className="text-2xl font-bold">{value}</h3>

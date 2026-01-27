@@ -56,7 +56,7 @@ export async function GET(request) {
     if (billItemsError) throw billItemsError
 
     // Calculate daily statistics
-    const totalRevenue = bills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+    const totalRevenue = bills.reduce((sum, bill) => sum + parseFloat(bill.subtotal || 0), 0)
     const totalBills = bills.length
     const uniqueCustomers = totalBills // Use total bills as customer count since customer_id doesn't exist
     const avgOrderValue = totalBills > 0 ? totalRevenue / totalBills : 0
@@ -109,7 +109,7 @@ export async function GET(request) {
       topItems,
       bills: bills.map(bill => ({
         id: bill.id,
-        amount: parseFloat(bill.total_amount),
+        amount: parseFloat(bill.subtotal || 0),
         paymentType: bill.payment_type,
         time: bill.created_at
       }))

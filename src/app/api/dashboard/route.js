@@ -49,7 +49,7 @@ export async function GET(request) {
         return billDate >= dayDate && billDate <= dayEnd
       })
       
-      const daySales = dayBills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+      const daySales = dayBills.reduce((sum, bill) => sum + parseFloat(bill.subtotal || 0), 0)
       
       weeklySales.push({
         day: days[dayDate.getDay()],
@@ -74,7 +74,7 @@ export async function GET(request) {
     if (recentError) throw recentError
 
     // Calculate today's sales and bills
-    const todaySales = todayBills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+    const todaySales = todayBills.reduce((sum, bill) => sum + parseFloat(bill.subtotal || 0), 0)
     const todayBillsCount = todayBills.length
 
     // Get monthly revenue
@@ -83,12 +83,12 @@ export async function GET(request) {
     
     const { data: monthlyBills, error: monthlyError } = await supabase
       .from('bills')
-      .select('total_amount')
+      .select('subtotal')
       .gte('created_at', monthAgo.toISOString())
 
     if (monthlyError) throw monthlyError
 
-    const monthlyRevenue = monthlyBills.reduce((sum, bill) => sum + parseFloat(bill.total_amount), 0)
+    const monthlyRevenue = monthlyBills.reduce((sum, bill) => sum + parseFloat(bill.subtotal || 0), 0)
 
     // Calculate average order value
     const averageOrderValue = todayBillsCount > 0 ? todaySales / todayBillsCount : 0

@@ -3,17 +3,18 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { LogOut, User, Clock, Menu, LayoutDashboard, Utensils, PlusCircle, IndianRupee, History, Settings, ChefHat } from 'lucide-react'
+import { LogOut, User, Clock, Menu, LayoutDashboard, Utensils, PlusCircle, IndianRupee, History, Settings, ChefHat, Table } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet.jsx'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Tables', href: '/tables', icon: Table },
   { name: 'Add Menu Item', href: '/menu/add', icon: PlusCircle },
   { name: 'Menu List', href: '/menu/list', icon: Utensils },
-  { name: 'Create Bill', href: '/billing/create', icon: IndianRupee },
+  { name: 'Create Parcel Bill', href: '/billing/parcel', icon: IndianRupee },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Bill History', href: '/billing/history', icon: History },
 ]
 
@@ -78,26 +79,28 @@ export function Navbar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors',
+                'flex items-center px-3 py-3 text-sm lg:text-base font-medium rounded-md transition-colors',
                 isActive
                   ? 'bg-orange-100 text-orange-700 border-r-2 border-orange-600'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               )}
             >
-              <item.icon className="mr-3 h-5 w-5" />
+              <item.icon className="mr-3 h-5 w-5 lg:h-6 lg:w-6" />
               {item.name}
             </Link>
           )
         })}
       </nav>
 
-      <div className="p-3 border-t">
+      <Separator className="mx-3" />
+      
+      <div className="p-3">
         <Button
           onClick={handleLogout}
           variant="ghost"
-          className="w-full justify-start text-gray-600 hover:text-gray-900 py-3 text-sm font-medium"
+          className="w-full justify-start text-gray-600 hover:text-gray-900 py-3 text-sm lg:text-base font-medium"
         >
-          <LogOut className="mr-3 h-5 w-5" />
+          <LogOut className="mr-3 h-5 w-5 lg:h-6 lg:w-6" />
           Logout
         </Button>
       </div>

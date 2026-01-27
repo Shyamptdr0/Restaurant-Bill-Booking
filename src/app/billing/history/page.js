@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Search, Eye, Printer, Calendar, IndianRupee, Trash2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Search, Eye, EyeOff, Printer, Calendar, IndianRupee, Trash2, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
 
@@ -42,6 +42,8 @@ export default function BillHistory() {
     totalRevenue: 0,
     todayRevenue: 0
   })
+  const [showTotalRevenue, setShowTotalRevenue] = useState(false)
+  const [showTodayRevenue, setShowTodayRevenue] = useState(false)
 
   const fetchBills = useCallback(async () => {
     try {
@@ -253,26 +255,56 @@ export default function BillHistory() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="cursor-pointer">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                  <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowTotalRevenue(!showTotalRevenue)}
+                      className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                      aria-label={showTotalRevenue ? 'Hide amount' : 'Show amount'}
+                    >
+                      {showTotalRevenue ? (
+                        <Eye className="h-4 w-4 text-gray-500" />
+                      ) : (
+                        <EyeOff className="h-4 w-4 text-gray-500" />
+                      )}
+                    </button>
+                    <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatCurrency(stats?.totalRevenue)}</div>
+                <CardContent onClick={() => setShowTotalRevenue(!showTotalRevenue)}>
+                  <div className="text-2xl font-bold">
+                    {showTotalRevenue ? formatCurrency(stats?.totalRevenue) : '••••••'}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     All time revenue
                   </p>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="cursor-pointer">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
-                  <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowTodayRevenue(!showTodayRevenue)}
+                      className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                      aria-label={showTodayRevenue ? 'Hide amount' : 'Show amount'}
+                    >
+                      {showTodayRevenue ? (
+                        <Eye className="h-4 w-4 text-gray-500" />
+                      ) : (
+                        <EyeOff className="h-4 w-4 text-gray-500" />
+                      )}
+                    </button>
+                    <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatCurrency(stats?.todayRevenue)}</div>
+                <CardContent onClick={() => setShowTodayRevenue(!showTodayRevenue)}>
+                  <div className="text-2xl font-bold">
+                    {showTodayRevenue ? formatCurrency(stats?.todayRevenue) : '••••••'}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Revenue generated today
                   </p>

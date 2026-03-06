@@ -6,12 +6,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
 import { ArrowLeft, Search, Eye, EyeOff, Printer, Calendar, IndianRupee, Trash2, AlertTriangle } from 'lucide-react'
+import { Field, FieldLabel } from '@/components/ui/field'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination'
 import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
 
@@ -44,6 +52,8 @@ export default function BillHistory() {
   })
   const [showTotalRevenue, setShowTotalRevenue] = useState(false)
   const [showTodayRevenue, setShowTodayRevenue] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
 
   const fetchBills = useCallback(async () => {
     try {
@@ -52,8 +62,9 @@ export default function BillHistory() {
       const result = await response.json()
       const allBills = result.data || []
       
-      // Log all bills to see their statuses
-      console.log('All bills:', allBills.map(bill => ({ id: bill.id, bill_no: bill.bill_no, status: bill.status })))
+      // Debug: Log the actual number of bills returned
+      console.log('Total bills from API:', allBills.length)
+      console.log('First 5 bills:', allBills.slice(0, 5).map(bill => ({ id: bill.id, bill_no: bill.bill_no, status: bill.status })))
       
       // Temporarily show all bills to debug
       setBills(allBills || [])
@@ -106,6 +117,11 @@ export default function BillHistory() {
     filterBills()
   }, [bills, searchTerm, paymentFilter, dateFilter, tableFilter])
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, paymentFilter, dateFilter, tableFilter])
+
   const filterBills = () => {
     let filtered = bills
 
@@ -155,6 +171,82 @@ export default function BillHistory() {
     }
 
     setFilteredBills(filtered)
+  }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredBills.length / rowsPerPage)
+  const startIndex = (currentPage - 1) * rowsPerPage
+  const endIndex = startIndex + rowsPerPage
+  const paginatedBills = filteredBills.slice(startIndex, endIndex)
+  const startRecord = filteredBills.length > 0 ? startIndex + 1 : 0
+  const endRecord = Math.min(endIndex, filteredBills.length)
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+  }
+
+  const handleRowsPerPageChange = (value) => {
+    setRowsPerPage(Number(value))
+    setCurrentPage(1) // Reset to first page when changing rows per page
+  }
+
+  const PaginationComponent = () => {
+    return (
+      <div className="flex items-center justify-between gap-4">
+        <Field orientation="horizontal" className="w-fit">
+          <FieldLabel htmlFor="select-rows-per-page">Rows per page</FieldLabel>
+          <Select value={rowsPerPage.toString()} onValueChange={handleRowsPerPageChange}>
+            <SelectTrigger className="w-20" id="select-rows-per-page">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectGroup>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="500">500</SelectItem>
+                <SelectItem value="1000">1000</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-600">
+            {startRecord}-{endRecord} of {filteredBills.length} records
+          </span>
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault()
+                    if (currentPage > 1) handlePageChange(currentPage - 1)
+                  }}
+                  className={currentPage <= 1 ? 'pointer-events-none opacity-50' : ''}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <span className="flex items-center px-3 py-2 text-sm">
+                  {currentPage} of {totalPages}
+                </span>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault()
+                    if (currentPage < totalPages) handlePageChange(currentPage + 1)
+                  }}
+                  className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : ''}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      </div>
+    )
   }
 
   const getTableOptions = () => {
@@ -381,74 +473,81 @@ export default function BillHistory() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[600px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="whitespace-nowrap">Bill No</TableHead>
-                          <TableHead className="whitespace-nowrap">Date</TableHead>
-                          <TableHead className="whitespace-nowrap">Time</TableHead>
-                          <TableHead className="whitespace-nowrap">Table</TableHead>
-                          <TableHead className="whitespace-nowrap">Total</TableHead>
-                          <TableHead className="whitespace-nowrap">Payment</TableHead>
-                          <TableHead className="whitespace-nowrap">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredBills.map((bill) => (
-                          <TableRow key={bill.id}>
-                            <TableCell className="font-medium whitespace-nowrap">#{bill.bill_no}</TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {new Date(bill.created_at).toLocaleDateString()}
+                  <>
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[600px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap">Bill No</TableHead>
+                            <TableHead className="whitespace-nowrap">Date</TableHead>
+                            <TableHead className="whitespace-nowrap">Time</TableHead>
+                            <TableHead className="whitespace-nowrap">Table</TableHead>
+                            <TableHead className="whitespace-nowrap">Total</TableHead>
+                            <TableHead className="whitespace-nowrap">Payment</TableHead>
+                            <TableHead className="whitespace-nowrap">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedBills.map((bill) => (
+                            <TableRow key={bill.id}>
+                              <TableCell className="font-medium whitespace-nowrap">#{bill.bill_no}</TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {new Date(bill.created_at).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {new Date(bill.created_at).toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {bill.table_name ? `${bill.table_name} (${bill.section})` : 'Parcel'}
+                              </TableCell>
+                              <TableCell className="font-semibold whitespace-nowrap">
+                                {formatCurrency(bill.subtotal)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <span className="capitalize px-2 py-1 bg-gray-100 rounded text-sm">
+                                {formatPaymentType(bill.payment_type)}
+                              </span>
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
-                              {new Date(bill.created_at).toLocaleTimeString('en-US', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {bill.table_name ? `${bill.table_name} (${bill.section})` : 'Parcel'}
-                            </TableCell>
-                            <TableCell className="font-semibold whitespace-nowrap">
-                              {formatCurrency(bill.subtotal)}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              <span className="capitalize px-2 py-1 bg-gray-100 rounded text-sm">
-                              {formatPaymentType(bill.payment_type)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <div className="flex space-x-2">
-                              <Link href={`/billing/view/${bill.id}`}>
-                                <Button size="sm" variant="outline">
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  View
+                              <div className="flex space-x-2">
+                                <Link href={`/billing/view/${bill.id}`}>
+                                  <Button size="sm" variant="outline">
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    View
+                                  </Button>
+                                </Link>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handlePrint(bill.id)}
+                                >
+                                  <Printer className="h-4 w-4 mr-1" />
+                                  Print
                                 </Button>
-                              </Link>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handlePrint(bill.id)}
-                              >
-                                <Printer className="h-4 w-4 mr-1" />
-                                Print
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDelete(bill.id, bill.bill_no)}
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Delete
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  </div>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDelete(bill.id, bill.bill_no)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    </div>
+                    
+                    {/* Pagination */}
+                    <div className="mt-4 pt-4 border-t">
+                      <PaginationComponent />
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>

@@ -30,37 +30,44 @@ export async function GET(request) {
     // Get bill items for the specified period
     const { data: billItems, error: billItemsError } = await supabase
       .from('bill_items')
-      .select(`
-        quantity,
-        price,
-        menu_items!inner(
-          id,
-          name,
-          category
-        )
-      `)
+      .select('*')
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
 
     if (billItemsError) throw billItemsError
 
+    // Get menu items to map names and categories
+    const { data: menuItems, error: menuError } = await supabase
+      .from('menu_items')
+      .select('id, name, category')
+
+    if (menuError) throw menuError
+
+    // Create a map of menu items for quick lookup
+    const menuItemMap = {}
+    menuItems.forEach(item => {
+      menuItemMap[item.id] = item
+    })
+
     // Aggregate sales by menu item
     const itemSales = {}
     
     billItems.forEach(item => {
-      const menuItemId = item.menu_items.id
-      if (!itemSales[menuItemId]) {
-        itemSales[menuItemId] = {
-          id: menuItemId,
-          name: item.menu_items.name,
-          category: item.menu_items.category,
+      const menuItem = menuItemMap[item.item_id]
+      if (!menuItem) return // Skip if menu item not found
+      
+      if (!itemSales[item.item_id]) {
+        itemSales[item.item_id] = {
+          id: item.item_id,
+          name: menuItem.name,
+          category: menuItem.category,
           totalQuantity: 0,
           totalRevenue: 0
         }
       }
       
-      itemSales[menuItemId].totalQuantity += item.quantity
-      itemSales[menuItemId].totalRevenue += (item.price * item.quantity)
+      itemSales[item.item_id].totalQuantity += item.quantity
+      itemSales[item.item_id].totalRevenue += (item.price * item.quantity)
     })
 
     // Sort by quantity and get top items

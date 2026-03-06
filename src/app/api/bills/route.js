@@ -52,34 +52,68 @@ export async function GET(request) {
     const dateFilter = searchParams.get('date_filter')
     const tableId = searchParams.get('table_id')
     const status = searchParams.get('status')
+    const page = parseInt(searchParams.get('page')) || 1
+    const limit = parseInt(searchParams.get('limit')) || 1000
 
-    let query = supabase.from('bills').select('*').order('created_at', { ascending: false })
-
+    // First, get the total count
+    let countQuery = supabase.from('bills').select('id', { count: 'exact', head: true })
+    
     if (paymentType && paymentType !== 'all') {
-      query = query.eq('payment_type', paymentType)
+      countQuery = countQuery.eq('payment_type', paymentType)
     }
-
     if (tableId) {
-      query = query.eq('table_id', tableId)
+      countQuery = countQuery.eq('table_id', tableId)
     }
-
     if (status) {
-      query = query.eq('status', status)
+      countQuery = countQuery.eq('status', status)
     }
 
-    const { data, error } = await withRetry(async () => {
-      return await query
-    })
+    const { count: totalCount, error: countError } = await countQuery
+    if (countError) throw countError
 
-    if (error) throw error
+    // Now fetch all records in batches if needed
+    let allData = []
+    let hasMore = true
+    let offset = 0
+    const batchSize = 1000
+
+    while (hasMore) {
+      let query = supabase.from('bills').select('*').order('created_at', { ascending: false }).range(offset, offset + batchSize - 1)
+
+      if (paymentType && paymentType !== 'all') {
+        query = query.eq('payment_type', paymentType)
+      }
+      if (tableId) {
+        query = query.eq('table_id', tableId)
+      }
+      if (status) {
+        query = query.eq('status', status)
+      }
+
+      const { data, error } = await withRetry(async () => {
+        return await query
+      })
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        allData = allData.concat(data)
+        offset += batchSize
+        hasMore = data.length === batchSize
+      } else {
+        hasMore = false
+      }
+    }
+
+    console.log(`Fetched ${allData.length} total records in batches`)
 
     // Apply date filtering if needed
-    let filteredData = data
+    let filteredData = allData
     if (dateFilter && dateFilter !== 'all') {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
-      filteredData = data.filter(bill => {
+      filteredData = allData.filter(bill => {
         const billDate = new Date(bill.created_at)
         
         switch (dateFilter) {

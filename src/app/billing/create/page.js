@@ -56,7 +56,7 @@ function CreateBillContent() {
 
   const fetchTemporaryItems = async () => {
     try {
-      const response = await fetch(`/api/temporary-items?table_id=${tableId}`)
+      const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${Date.now()}`)
       if (response.ok) {
         const data = await response.json()
         if (data.data && data.data.length > 0) {
@@ -128,12 +128,12 @@ function CreateBillContent() {
   }
 
   const addToCart = (item) => {
-    const existingItem = cart.find(cartItem => cartItem.id === item.id)
+    const existingItem = cart.find(cartItem => String(cartItem.id) === String(item.id))
     
     if (existingItem) {
       // Update existing item quantity, keep the same cartId
       const newCart = cart.map(cartItem =>
-        cartItem.id === item.id
+        String(cartItem.id) === String(item.id)
           ? { ...cartItem, quantity: cartItem.quantity + 1 }
           : cartItem
       )
@@ -156,7 +156,7 @@ function CreateBillContent() {
       removeFromCart(itemId)
     } else {
       const newCart = cart.map(item =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
+        String(item.id) === String(itemId) ? { ...item, quantity: newQuantity } : item
       )
       setCart(newCart)
       syncToDatabase(newCart)
@@ -164,7 +164,7 @@ function CreateBillContent() {
   }
 
   const removeFromCart = (itemId) => {
-    const newCart = cart.filter(item => item.id !== itemId)
+    const newCart = cart.filter(item => String(item.id) !== String(itemId))
     setCart(newCart)
     syncToDatabase(newCart)
   }

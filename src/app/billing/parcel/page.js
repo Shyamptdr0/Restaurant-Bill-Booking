@@ -71,11 +71,11 @@ function ParcelBillContent() {
   }
 
   const addToCart = (item) => {
-    const existingItem = cart.find(cartItem => cartItem.id === item.id)
+    const existingItem = cart.find(cartItem => String(cartItem.id) === String(item.id))
     
     if (existingItem) {
       setCart(cart.map(cartItem =>
-        cartItem.id === item.id
+        String(cartItem.id) === String(item.id)
           ? { ...cartItem, quantity: cartItem.quantity + 1 }
           : cartItem
       ))
@@ -89,13 +89,13 @@ function ParcelBillContent() {
       removeFromCart(itemId)
     } else {
       setCart(cart.map(item =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
+        String(item.id) === String(itemId) ? { ...item, quantity: newQuantity } : item
       ))
     }
   }
 
   const removeFromCart = (itemId) => {
-    setCart(cart.filter(item => item.id !== itemId))
+    setCart(cart.filter(item => String(item.id) !== String(itemId)))
   }
 
   // Helper function to round up to next integer

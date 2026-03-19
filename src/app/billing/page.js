@@ -34,14 +34,14 @@ function BillingPageContent() {
 
   const fetchExistingBill = async () => {
     try {
-      const response = await fetch(`/api/bills?table_id=${tableId}&status=running`)
+      const response = await fetch(`/api/bills?table_id=${tableId}&status=running&_t=${Date.now()}`)
       if (response.ok) {
         const data = await response.json()
         if (data.data && data.data.length > 0) {
           const bill = data.data[0]
           setExistingBill(bill)
           // Load existing bill items
-          const itemsResponse = await fetch(`/api/bills/${bill.id}/items`)
+          const itemsResponse = await fetch(`/api/bills/${bill.id}/items?_t=${Date.now()}`)
           if (itemsResponse.ok) {
             const itemsData = await itemsResponse.json()
             if (itemsData.data) {
@@ -78,11 +78,11 @@ function BillingPageContent() {
 
   const addToCart = (menuItem) => {
     setCartItems(prev => {
-      const existingItem = prev.find(item => item.id === menuItem.id)
+      const existingItem = prev.find(item => String(item.id) === String(menuItem.id))
       if (existingItem) {
         // Update quantity of existing item
         return prev.map(item =>
-          item.id === menuItem.id
+          String(item.id) === String(menuItem.id)
             ? { ...item, quantity: item.quantity + 1 }
             : item
         )
@@ -96,7 +96,7 @@ function BillingPageContent() {
     setCartItems(prev => {
       console.log('Updating quantity for item:', itemId, 'change:', change)
       const updatedItems = prev.map(item => {
-        if (item.id === itemId) {
+        if (String(item.id) === String(itemId)) {
           const newQuantity = item.quantity + change
           return newQuantity > 0 ? { ...item, quantity: newQuantity } : null
         }
@@ -110,7 +110,7 @@ function BillingPageContent() {
 
   const removeFromCart = (itemId) => {
     setCartItems(prev => {
-      const updatedItems = prev.filter(item => item.id !== itemId)
+      const updatedItems = prev.filter(item => String(item.id) !== String(itemId))
       console.log('Removing item:', itemId, 'Remaining items:', updatedItems)
       return updatedItems
     })

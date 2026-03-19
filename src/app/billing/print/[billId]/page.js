@@ -92,7 +92,7 @@ export default function PrintBill() {
 
   const fetchBillDetails = async () => {
     try {
-      const response = await fetch(`/api/bills/${billId}`)
+      const response = await fetch(`/api/bills/${billId}?_t=${Date.now()}`)
       const result = await response.json()
 
       if (result.error) {
@@ -100,7 +100,19 @@ export default function PrintBill() {
       }
 
       setBill(result.data)
-      setBillItems(result.data.items || [])
+      
+      const items = result.data.items || []
+      const groupedItems = {}
+      items.forEach(item => {
+        const itemId = String(item.item_id || item.id || item.name)
+        if (groupedItems[itemId]) {
+          groupedItems[itemId].quantity += item.quantity
+        } else {
+          groupedItems[itemId] = { ...item }
+        }
+      })
+      
+      setBillItems(Object.values(groupedItems))
     } catch (error) {
       console.error('Error fetching bill details:', error)
       alert('Error loading bill: ' + error.message)

@@ -64,7 +64,7 @@ export default function PrintFromTemporary() {
 
   const fetchTemporaryItems = async () => {
     try {
-      const response = await fetch(`/api/temporary-items?table_id=${tableId}`)
+      const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${Date.now()}`)
       const data = await response.json()
       
       if (data.error) {
@@ -72,7 +72,18 @@ export default function PrintFromTemporary() {
       }
 
       if (data.data && data.data.length > 0) {
-        setTemporaryItems(data.data)
+        // Group items by item_id to handle potential duplicates
+        const groupedItems = {}
+        data.data.forEach(item => {
+          const itemId = String(item.item_id)
+          if (groupedItems[itemId]) {
+            groupedItems[itemId].quantity += item.quantity
+            groupedItems[itemId].total = groupedItems[itemId].price * groupedItems[itemId].quantity
+          } else {
+            groupedItems[itemId] = { ...item }
+          }
+        })
+        setTemporaryItems(Object.values(groupedItems))
       } else {
         throw new Error('No temporary items found for this table')
       }

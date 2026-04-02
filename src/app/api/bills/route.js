@@ -173,16 +173,27 @@ export async function POST(request) {
 
     if (billError) throw billError
 
-    // Create bill items with snapshots
-    const billItems = items.map(item => ({
-      bill_id: bill.id,
-      item_id: item.id,
-      item_name: item.name, // Store item name as snapshot
-      item_category: item.category, // Store item category as snapshot
-      quantity: item.quantity,
-      price: item.price,
-      total: item.price * item.quantity
-    }))
+    // Create bill items with snapshots - group by item_id to prevent duplicates
+    const groupedItems = {}
+    items.forEach(item => {
+      const id = item.id || item.item_id
+      if (groupedItems[id]) {
+        groupedItems[id].quantity += item.quantity
+        groupedItems[id].total += (item.price * item.quantity)
+      } else {
+        groupedItems[id] = {
+          bill_id: bill.id,
+          item_id: id,
+          item_name: item.name || item.item_name, // Store item name as snapshot
+          item_category: item.category || item.item_category, // Store item category as snapshot
+          quantity: item.quantity,
+          price: item.price,
+          total: item.price * item.quantity
+        }
+      }
+    })
+
+    const billItems = Object.values(groupedItems)
 
     const { data: itemsData, error: itemsError } = await withRetry(async () => {
       return await supabase

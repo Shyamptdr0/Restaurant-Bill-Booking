@@ -128,45 +128,52 @@ function CreateBillContent() {
   }
 
   const addToCart = (item) => {
-    const existingItem = cart.find(cartItem => String(cartItem.id) === String(item.id))
-    
-    if (existingItem) {
-      // Update existing item quantity, keep the same cartId
-      const newCart = cart.map(cartItem =>
-        String(cartItem.id) === String(item.id)
-          ? { ...cartItem, quantity: cartItem.quantity + 1 }
-          : cartItem
-      )
-      setCart(newCart)
+    setCart(currentCart => {
+      const existingItem = currentCart.find(cartItem => String(cartItem.id) === String(item.id))
+      let newCart
+      
+      if (existingItem) {
+        // Update existing item quantity, keep the same cartId
+        newCart = currentCart.map(cartItem =>
+          String(cartItem.id) === String(item.id)
+            ? { ...cartItem, quantity: cartItem.quantity + 1 }
+            : cartItem
+        )
+      } else {
+        // Add new item with unique cartId
+        newCart = [...currentCart, { 
+          ...item, 
+          quantity: 1,
+          cartId: `${item.id}_${Date.now()}_${Math.random()}` // Unique identifier for cart
+        }]
+      }
+      
+      // Sync the updated cart to the database
       syncToDatabase(newCart)
-    } else {
-      // Add new item with unique cartId
-      const newCart = [...cart, { 
-        ...item, 
-        quantity: 1,
-        cartId: `${item.id}_${Date.now()}_${Math.random()}` // Unique identifier for cart
-      }]
-      setCart(newCart)
-      syncToDatabase(newCart)
-    }
+      return newCart
+    })
   }
 
   const updateQuantity = (itemId, newQuantity) => {
     if (newQuantity <= 0) {
       removeFromCart(itemId)
     } else {
-      const newCart = cart.map(item =>
-        String(item.id) === String(itemId) ? { ...item, quantity: newQuantity } : item
-      )
-      setCart(newCart)
-      syncToDatabase(newCart)
+      setCart(currentCart => {
+        const newCart = currentCart.map(item =>
+          String(item.id) === String(itemId) ? { ...item, quantity: newQuantity } : item
+        )
+        syncToDatabase(newCart)
+        return newCart
+      })
     }
   }
 
   const removeFromCart = (itemId) => {
-    const newCart = cart.filter(item => String(item.id) !== String(itemId))
-    setCart(newCart)
-    syncToDatabase(newCart)
+    setCart(currentCart => {
+      const newCart = currentCart.filter(item => String(item.id) !== String(itemId))
+      syncToDatabase(newCart)
+      return newCart
+    })
   }
 
   const syncToDatabase = async (cartItems) => {
@@ -178,6 +185,8 @@ function CreateBillContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           table_id: tableId,
+          table_name: tableName,
+          section: section,
           items: cartItems.map(item => ({
             id: item.id,
             name: item.name,

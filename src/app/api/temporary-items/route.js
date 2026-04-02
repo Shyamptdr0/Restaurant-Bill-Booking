@@ -92,19 +92,30 @@ export async function POST(request) {
         .eq('table_id', table_id)
     })
 
-    // Insert new temporary items
-    const tempItems = items.map(item => ({
-      table_id, // UUID string
-      table_name,
-      section,
-      item_id: item.id, // UUID string
-      item_name: item.name,
-      item_category: item.category,
-      quantity: item.quantity,
-      price: item.price,
-      total: item.price * item.quantity,
-      created_at: new Date().toISOString()
-    }))
+    // Create bill items to insert - group by item_id to prevent duplicates
+    const groupedItems = {}
+    items.forEach(item => {
+      const id = item.id || item.item_id
+      if (groupedItems[id]) {
+        groupedItems[id].quantity += item.quantity
+        groupedItems[id].total += (item.price * item.quantity)
+      } else {
+        groupedItems[id] = {
+          table_id, // UUID string
+          table_name,
+          section,
+          item_id: id, // UUID string
+          item_name: item.name || item.item_name,
+          item_category: item.category || item.item_category,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.price * item.quantity,
+          created_at: new Date().toISOString()
+        }
+      }
+    })
+
+    const tempItems = Object.values(groupedItems)
 
     const { data, error } = await withRetry(async () => {
       return await supabase
@@ -141,10 +152,20 @@ export async function PUT(request) {
         .eq('table_id', table_id)
     })
 
-    if (fetchError) throw fetchError
-
     // Process updates: add new items, update existing ones, remove deleted ones
-    const incomingItemIds = items.map(item => item.id)
+    // First, consolidate the incoming items list to prevent duplicates
+    const consolidatedItems = {}
+    items.forEach(item => {
+      const id = item.id || item.item_id
+      if (consolidatedItems[id]) {
+        consolidatedItems[id].quantity += item.quantity
+      } else {
+        consolidatedItems[id] = { ...item }
+      }
+    })
+
+    const itemsToProcess = Object.values(consolidatedItems)
+    const incomingItemIds = itemsToProcess.map(item => item.id || item.item_id)
     const existingItemIds = existingItems.map(item => item.item_id)
 
     // Remove items that are no longer in the cart
@@ -160,7 +181,7 @@ export async function PUT(request) {
     }
 
     // Add or update items
-    for (const item of items) {
+    for (const item of itemsToProcess) {
       const existingItem = existingItems.find(existing => existing.item_id === item.id)
       
       if (existingItem) {
@@ -183,8 +204,8 @@ export async function PUT(request) {
             .from('temporary_items')
             .insert({
               table_id,
-              table_name: existingItems[0]?.table_name || null,
-              section: existingItems[0]?.section || null,
+              table_name: body.table_name || existingItems[0]?.table_name || null,
+              section: body.section || existingItems[0]?.section || null,
               item_id: item.id,
               item_name: item.name,
               item_category: item.category,
@@ -199,11 +220,12 @@ export async function PUT(request) {
 
     // Fetch updated items
     const { data: updatedItems, error: finalFetchError } = await withRetry(async () => {
-      return await supabase
+      const query = supabase
         .from('temporary_items')
         .select('*')
         .eq('table_id', table_id)
         .order('created_at', { ascending: true })
+      return await query
     })
 
     if (finalFetchError) throw finalFetchError

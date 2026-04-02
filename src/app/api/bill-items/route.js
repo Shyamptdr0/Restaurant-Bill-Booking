@@ -18,16 +18,27 @@ export async function POST(request) {
       )
     }
 
-    // Create bill items
-    const billItems = items.map(item => ({
-      bill_id,
-      item_id: item.item_id,
-      item_name: item.item_name,
-      item_category: item.item_category,
-      quantity: item.quantity,
-      price: item.price,
-      total: item.total
-    }))
+    // Create bill items - group by item_id to prevent duplicates
+    const groupedItems = {}
+    items.forEach(item => {
+      const id = item.item_id || item.id
+      if (groupedItems[id]) {
+        groupedItems[id].quantity += item.quantity
+        groupedItems[id].total += (item.price * item.quantity)
+      } else {
+        groupedItems[id] = {
+          bill_id,
+          item_id: id,
+          item_name: item.item_name || item.name,
+          item_category: item.item_category || item.category,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total || (item.price * item.quantity)
+        }
+      }
+    })
+
+    const billItems = Object.values(groupedItems)
 
     const { data, error } = await supabase
       .from('bill_items')

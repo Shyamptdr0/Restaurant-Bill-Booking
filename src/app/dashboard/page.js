@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
 import {
@@ -96,15 +96,15 @@ import {
 } from 'recharts'
 
 /* ---------------------- SAMPLE DATA ---------------------- */
- const formatCurrency = (value) => {
-    if (value === null || value === undefined || isNaN(Number(value))) {
-      return '₹0.00'
-    }
-    return `₹${Number(value).toLocaleString('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`
+const formatCurrency = (value) => {
+  if (value === null || value === undefined || isNaN(Number(value))) {
+    return '₹0.00'
   }
+  return `₹${Number(value).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
 
 const topSellingItems = [
   { name: 'Butter Chicken', qty: 128, icon: UtensilsCrossed },
@@ -141,26 +141,26 @@ const generateWeeklySalesFallback = (allBills = []) => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const today = new Date()
   const weeklySales = []
-  
+
   for (let i = 6; i >= 0; i--) {
     const date = new Date(today)
     date.setDate(today.getDate() - i)
     date.setHours(0, 0, 0, 0)
     const dateEnd = new Date(date)
     dateEnd.setHours(23, 59, 59, 999)
-    
+
     // Calculate actual sales for this day from bills data
     const daySales = allBills.filter(bill => {
       const billDate = new Date(bill.created_at)
       return billDate >= date && billDate <= dateEnd
     }).reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-    
+
     weeklySales.push({
       day: days[date.getDay()],
       sales: daySales
     })
   }
-  
+
   return weeklySales
 }
 
@@ -171,6 +171,7 @@ export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const isFirstRender = useRef(true)
 
   const [stats, setStats] = useState({
     todaySales: 0,
@@ -218,10 +219,20 @@ export default function Dashboard() {
   const [performanceMetrics, setPerformanceMetrics] = useState({})
   const [showMonthlyRevenue, setShowMonthlyRevenue] = useState(false)
 
+  // Initial data fetch on mount
   useEffect(() => {
-    fetchDashboardData()
-    setCurrentDate(new Date()) // Update current date when component mounts
+    fetchDashboardData(true)
+    setCurrentDate(new Date())
   }, [])
+
+  // Refetch when month changes (without showing full-screen spinner)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    fetchDashboardData(false)
+  }, [currentMonth])
 
   // Auto-refresh functionality
   useEffect(() => {
@@ -243,9 +254,32 @@ export default function Dashboard() {
     }
   }, [allBills])
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (showSpinner = false) => {
+    // 1. Immediate local calculation to make it "fast"
+    if (allBills.length > 0) {
+      const monthStr = currentMonth.toISOString().slice(0, 7)
+      const currentMonthBills = allBills.filter(bill => {
+        if (!bill.created_at) return false
+        const billDate = new Date(bill.created_at)
+        return billDate.toISOString().slice(0, 7) === monthStr
+      })
+      
+      const localRevenue = currentMonthBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
+      const localBills = currentMonthBills.length
+      const localAvgOrder = localBills > 0 ? localRevenue / localBills : 0
+      
+      setMonthly(prev => ({
+        ...prev,
+        revenue: localRevenue,
+        bills: localBills,
+        avgOrder: localAvgOrder,
+        // Keep previous growth since we don't calculate it locally easily
+      }))
+    }
+
     try {
-      setLoading(true)
+      if (showSpinner) setLoading(true)
+      setRefreshing(true)
 
       console.log('Dashboard: Fetching dashboard data...')
       const month = currentMonth.toISOString().slice(0, 7) // YYYY-MM format
@@ -312,36 +346,41 @@ export default function Dashboard() {
         todaySales: todaySales,
         todayBills: todayBills.length,
         totalItems: totalItems,
-        weeklySales: serverData.dashboard?.weeklySales?.length > 0 
+        weeklySales: serverData.dashboard?.weeklySales?.length > 0
           ? serverData.dashboard.weeklySales.map(item => ({
-              ...item,
-              sales: Number(item.sales) || 0
-            }))
+            ...item,
+            sales: Number(item.sales) || 0
+          }))
           : generateWeeklySalesFallback(allBills),
         monthlyRevenue: serverData.dashboard?.monthlyRevenue || todaySales,
         averageOrderValue: serverData.dashboard?.averageOrderValue || 0,
-        totalMenuItems: menuItemsData?.data ? 
-          (Array.isArray(menuItemsData.data) ? menuItemsData.data.length : 
-           typeof menuItemsData.data === 'object' && menuItemsData.data.data ? 
-           menuItemsData.data.data.length : 0) : 0,
-        activeMenuItems: menuItemsData?.data ? 
+        totalMenuItems: menuItemsData?.data ?
+          (Array.isArray(menuItemsData.data) ? menuItemsData.data.length :
+            typeof menuItemsData.data === 'object' && menuItemsData.data.data ?
+              menuItemsData.data.data.length : 0) : 0,
+        activeMenuItems: menuItemsData?.data ?
           (Array.isArray(menuItemsData.data) ? menuItemsData.data.filter(item => item.status === 'active').length :
-           typeof menuItemsData.data === 'object' && menuItemsData.data.data ?
-           menuItemsData.data.data.filter(item => item.status === 'active').length : 0) : 0
+            typeof menuItemsData.data === 'object' && menuItemsData.data.data ?
+              menuItemsData.data.data.filter(item => item.status === 'active').length : 0) : 0
       }
       console.log('Dashboard: Setting stats:', newStats)
       setStats(newStats)
-      
+
       // Set recent bills and menu items for management
       setRecentBills(serverData.dashboard?.recentBills || [])
       setMenuItems(menuItemsData?.data || [])
 
-      // Update monthly stats from server data
+      // Calculate fallbacks from local bills for the selected month
+      const calculatedMonthlyRevenue = currentMonthBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
+      const calculatedMonthlyBills = currentMonthBills.length
+      const calculatedAvgOrder = calculatedMonthlyBills > 0 ? calculatedMonthlyRevenue / calculatedMonthlyBills : 0
+
+      // Update monthly stats from server data with local calculation as fallback
       const newMonthly = {
-        revenue: serverData.monthly?.data?.revenue || todaySales,
-        bills: serverData.monthly?.data?.bills || todayBills.length,
+        revenue: serverData.monthly?.data?.revenue !== undefined ? serverData.monthly.data.revenue : calculatedMonthlyRevenue,
+        bills: serverData.monthly?.data?.bills !== undefined ? serverData.monthly.data.bills : calculatedMonthlyBills,
         customers: serverData.monthly?.data?.customers || 0,
-        avgOrder: serverData.monthly?.data?.avgOrderValue || 0,
+        avgOrder: serverData.monthly?.data?.avgOrderValue || calculatedAvgOrder,
         growth: serverData.monthly?.data?.growth || 0
       }
       console.log('Dashboard: Setting monthly stats:', newMonthly)
@@ -350,7 +389,7 @@ export default function Dashboard() {
       const newTopSelling = serverData.topSelling?.data || topSellingItems
       console.log('Dashboard: Setting top selling:', newTopSelling)
       setTopSelling(newTopSelling)
-      
+
       const newDailyData = serverData.monthly?.dailyData || null
       console.log('Dashboard: Setting daily data:', newDailyData)
       setDailyData(newDailyData)
@@ -425,7 +464,7 @@ export default function Dashboard() {
     fetchDailySales(date)
   }
 
- 
+
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear()
@@ -474,14 +513,14 @@ export default function Dashboard() {
     try {
       let dataToExport = []
       let filename = ''
-      
+
       if (exportFormat === 'csv' || exportFormat === 'json') {
         const response = await fetch('/api/bills')
         const result = await response.json()
         dataToExport = result.data || []
         filename = `bills_${new Date().toISOString().split('T')[0]}`
       }
-      
+
       if (exportFormat === 'csv') {
         const csv = convertToCSV(dataToExport)
         downloadFile(csv, `${filename}.csv`, 'text/csv')
@@ -489,7 +528,7 @@ export default function Dashboard() {
         const json = JSON.stringify(dataToExport, null, 2)
         downloadFile(json, `${filename}.json`, 'application/json')
       }
-      
+
       setShowExportDialog(false)
     } catch (error) {
       console.error('Error exporting data:', error)
@@ -498,18 +537,18 @@ export default function Dashboard() {
 
   const convertToCSV = (data) => {
     if (!data || data.length === 0) return ''
-    
+
     const headers = Object.keys(data[0])
     const csvHeaders = headers.join(',')
-    const csvRows = data.map(row => 
+    const csvRows = data.map(row =>
       headers.map(header => {
         const value = row[header]
-        return typeof value === 'string' && value.includes(',') 
-          ? `"${value}"` 
+        return typeof value === 'string' && value.includes(',')
+          ? `"${value}"`
           : value
       }).join(',')
     )
-    
+
     return [csvHeaders, ...csvRows].join('\n')
   }
 
@@ -530,7 +569,7 @@ export default function Dashboard() {
       const response = await fetch(`/api/bills/${billId}`, {
         method: 'DELETE'
       })
-      
+
       if (response.ok) {
         setRecentBills(recentBills.filter(bill => bill.id !== billId))
         setAllBills(allBills.filter(bill => bill.id !== billId))
@@ -547,14 +586,14 @@ export default function Dashboard() {
     const newAlerts = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    
-    const todaySales = allBills.filter(bill => 
+
+    const todaySales = allBills.filter(bill =>
       new Date(bill.created_at) >= today
     ).reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-    
-    const avgDailySales = allBills.length > 0 ? 
+
+    const avgDailySales = allBills.length > 0 ?
       allBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0) / Math.max(allBills.length / 30, 1) : 0
-    
+
     // Low sales alert
     if (todaySales < avgDailySales * 0.5) {
       newAlerts.push({
@@ -566,7 +605,7 @@ export default function Dashboard() {
         action: 'view-details'
       })
     }
-    
+
     // High sales alert
     if (todaySales > avgDailySales * 1.5) {
       newAlerts.push({
@@ -578,12 +617,12 @@ export default function Dashboard() {
         action: 'celebrate'
       })
     }
-    
+
     // No recent bills alert
-    const recentBillsCount = allBills.filter(bill => 
+    const recentBillsCount = allBills.filter(bill =>
       new Date(bill.created_at) >= new Date(Date.now() - 2 * 60 * 60 * 1000)
     ).length
-    
+
     if (recentBillsCount === 0 && new Date().getHours() > 10) {
       newAlerts.push({
         id: 'no-activity',
@@ -594,7 +633,7 @@ export default function Dashboard() {
         action: 'check-status'
       })
     }
-    
+
     setAlerts(newAlerts)
   }
 
@@ -607,29 +646,29 @@ export default function Dashboard() {
       popularPaymentMethods: {},
       customerFrequency: {}
     }
-    
+
     // Calculate average order value
     insights.averageOrderValue = allBills.length > 0 ?
       allBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0) / allBills.length : 0
-    
+
     // Analyze peak hours
     const hourlySales = {}
     allBills.forEach(bill => {
       const hour = new Date(bill.created_at).getHours()
       hourlySales[hour] = (hourlySales[hour] || 0) + 1
     })
-    
+
     insights.peakHours = Object.entries(hourlySales)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
       .map(([hour]) => `${hour}:00`)
-    
+
     // Popular payment methods
     allBills.forEach(bill => {
       const method = bill.payment_type || 'cash'
       insights.popularPaymentMethods[method] = (insights.popularPaymentMethods[method] || 0) + 1
     })
-    
+
     setCustomerInsights(insights)
   }
 
@@ -641,9 +680,9 @@ export default function Dashboard() {
       satisfaction: 0,
       targetAchievement: 0
     }
-    
+
     // Calculate revenue growth (week over week)
-    const thisWeek = allBills.filter(bill => 
+    const thisWeek = allBills.filter(bill =>
       new Date(bill.created_at) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     )
     const lastWeek = allBills.filter(bill => {
@@ -652,48 +691,48 @@ export default function Dashboard() {
       const twoWeeksAgo = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000)
       return billDate >= twoWeeksAgo && billDate < weekAgo
     })
-    
+
     const thisWeekRevenue = thisWeek.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
     const lastWeekRevenue = lastWeek.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-    
-    metrics.revenueGrowth = lastWeekRevenue > 0 ? 
+
+    metrics.revenueGrowth = lastWeekRevenue > 0 ?
       ((thisWeekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100 : 0
-    
-    metrics.orderGrowth = lastWeek.length > 0 ? 
+
+    metrics.orderGrowth = lastWeek.length > 0 ?
       ((thisWeek.length - lastWeek.length) / lastWeek.length) * 100 : 0
-    
+
     // Calculate efficiency (orders per hour)
     const operatingHours = 12 // Assuming 12 operating hours
     metrics.efficiency = thisWeek.length / operatingHours
-    
+
     // Set target achievement (mock data)
     const dailyTarget = 5000 // ₹5000 daily target
-    const todayRevenue = allBills.filter(bill => 
+    const todayRevenue = allBills.filter(bill =>
       new Date(bill.created_at).toDateString() === new Date().toDateString()
     ).reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-    
+
     metrics.targetAchievement = (todayRevenue / dailyTarget) * 100
-    
+
     setPerformanceMetrics(metrics)
   }
 
   const filteredBills = recentBills.filter(bill => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       bill.id?.toString().includes(searchQuery) ||
       bill.bill_no?.toString().includes(searchQuery)
-    
-    const matchesDate = dateFilter === 'all' || 
+
+    const matchesDate = dateFilter === 'all' ||
       (dateFilter === 'today' && new Date(bill.created_at).toDateString() === new Date().toDateString()) ||
       (dateFilter === 'week' && new Date(bill.created_at) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-    
+
     const matchesPayment = paymentFilter === 'all' || bill.payment_type === paymentFilter
-    
+
     return matchesSearch && matchesDate && matchesPayment
   })
 
   // Calculate today's bills for payment breakdown
   const today = new Date().toDateString()
-  const todayBills = allBills?.filter(bill => 
+  const todayBills = allBills?.filter(bill =>
     new Date(bill.created_at).toDateString() === today
   ) || []
 
@@ -756,7 +795,14 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
-                      {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      <div className="flex items-center gap-3">
+                        <span>{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                        <div className={`flex items-center transition-all ${refreshing ? 'animate-pulse opacity-50' : ''}`}>
+                          <span className="text-xl font-bold text-green-600">
+                            {formatCurrency(monthly?.revenue)}
+                          </span>
+                        </div>
+                      </div>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
@@ -798,34 +844,34 @@ export default function Dashboard() {
                       const isCurrentMonth = date.getMonth() === currentMonth.getMonth()
                       const isToday = date.toDateString() === new Date().toDateString()
                       const isFutureDate = date > new Date(new Date().setHours(0, 0, 0, 0))
-                      const dateStr = date.getFullYear() + '-' + 
-                        String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                      const dateStr = date.getFullYear() + '-' +
+                        String(date.getMonth() + 1).padStart(2, '0') + '-' +
                         String(date.getDate()).padStart(2, '0')
                       const daySales = allBills?.filter(bill => {
                         if (!bill.created_at) return false
                         const billDate = new Date(bill.created_at)
-                        const billDateStr = billDate.getFullYear() + '-' + 
-                          String(billDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                        const billDateStr = billDate.getFullYear() + '-' +
+                          String(billDate.getMonth() + 1).padStart(2, '0') + '-' +
                           String(billDate.getDate()).padStart(2, '0')
                         return billDateStr === dateStr
                       }).reduce((sum, bill) => sum + (bill.subtotal || 0), 0) || 0
-                      
+
                       if (!isCurrentMonth) {
                         return <div key={index} className="p-2" />
                       }
-                      
+
                       return (
                         <div
                           key={index}
                           onClick={() => {
                             if (isFutureDate) return // Don't allow clicking future dates
-                            
+
                             setSelectedDate(date)
                             const dayBills = allBills?.filter(bill => {
                               if (!bill.created_at) return false
                               const billDate = new Date(bill.created_at)
-                              const billDateStr = billDate.getFullYear() + '-' + 
-                                String(billDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                              const billDateStr = billDate.getFullYear() + '-' +
+                                String(billDate.getMonth() + 1).padStart(2, '0') + '-' +
                                 String(billDate.getDate()).padStart(2, '0')
                               return billDateStr === dateStr
                             }) || []
@@ -837,15 +883,14 @@ export default function Dashboard() {
                             })
                             setShowDailyDetails(true)
                           }}
-                          className={`p-2 rounded text-sm transition-colors ${
-                            isFutureDate
+                          className={`p-2 rounded text-sm transition-colors ${isFutureDate
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
                               : isToday
-                              ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
-                              : daySales > 0
-                              ? 'bg-green-100 hover:bg-green-200 cursor-pointer'
-                              : 'bg-gray-50 hover:bg-gray-100 cursor-pointer'
-                          }`}
+                                ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+                                : daySales > 0
+                                  ? 'bg-green-100 hover:bg-green-200 cursor-pointer'
+                                  : 'bg-gray-50 hover:bg-gray-100 cursor-pointer'
+                            }`}
                         >
                           <div className="text-center">
                             <div>{date.getDate()}</div>
@@ -898,7 +943,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    
+
                     {/* Bills List */}
                     <div>
                       <h4 className="font-semibold mb-3">Bills for this date</h4>
@@ -942,18 +987,20 @@ export default function Dashboard() {
             {/* MONTHLY SUMMARY */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
               <SummaryCard
-                title="Monthly Revenue"
+                title={`Revenue for ${currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`}
                 value={showMonthlyRevenue ? formatCurrency(monthly?.revenue) : '••••••'}
                 icon={IndianRupee}
                 growth={monthly?.growth}
                 showToggle={true}
                 isHidden={!showMonthlyRevenue}
                 onToggle={() => setShowMonthlyRevenue(!showMonthlyRevenue)}
+                loading={refreshing}
               />
               <SummaryCard
-                title="Total Bills"
+                title={`Bills for ${currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`}
                 value={monthly?.bills}
                 icon={ShoppingCart}
+                loading={refreshing}
               />
               <SummaryCard
                 title="Menu Items"
@@ -975,13 +1022,13 @@ export default function Dashboard() {
                     <BarChart data={stats.weeklySales}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="day" />
-                      <YAxis 
+                      <YAxis
                         tickFormatter={(value) => {
                           const num = Number(value || 0)
                           return isNaN(num) ? '0' : num.toString()
-                        }} 
+                        }}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value) => formatCurrency(Number(value || 0))}
                         labelFormatter={(label) => `${label}`}
                       />
@@ -1028,44 +1075,45 @@ export default function Dashboard() {
 
 /* ---------------------- SMALL COMPONENTS ---------------------- */
 
-function SummaryCard({ title, value, icon: Icon, growth, showToggle, isHidden, onToggle }) {
+function SummaryCard({ title, value, icon: Icon, growth, showToggle, isHidden, onToggle, loading }) {
   return (
     <Card className={showToggle ? 'cursor-pointer' : ''}>
-      <CardContent className="space-y-2 p-5">
+      <CardContent className="space-y-3 p-5">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">{title}</p>
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">{title}</p>
           <div className="flex items-center gap-2">
             {showToggle && (
               <button
                 onClick={onToggle}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                className="p-1.5 hover:bg-gray-100 rounded-full transition-all group"
                 aria-label={isHidden ? 'Show amount' : 'Hide amount'}
               >
                 {isHidden ? (
-                  <EyeOff className="h-4 w-4 text-gray-500" />
+                  <EyeOff className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
                 ) : (
-                  <Eye className="h-4 w-4 text-gray-500" />
+                  <Eye className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
                 )}
               </button>
             )}
-            <Icon className="h-5 w-5 text-muted-foreground" />
+            <div className="p-2 bg-gray-50 rounded-lg">
+              <Icon className="h-5 w-5 text-gray-600" />
+            </div>
           </div>
         </div>
 
-        <h3 className="text-2xl font-bold">{value}</h3>
+        {loading && !value ? (
+          <div className="h-9 w-3/4 bg-gray-200 animate-pulse rounded-md mt-1" />
+        ) : (
+          <h3 className={`text-3xl font-bold tracking-tight transition-all duration-300 ${loading ? 'animate-pulse opacity-70' : 'opacity-100'}`}>
+            {value}
+          </h3>
+        )}
 
         {growth !== undefined && (
-          <p
-            className={`flex items-center gap-1 text-sm ${growth >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}
-          >
-            {growth >= 0 ? (
-              <TrendingUp size={16} />
-            ) : (
-              <TrendingDown size={16} />
-            )}
-            {growth}% vs last month
-          </p>
+          <div className={`flex items-center gap-1.5 text-sm font-medium ${growth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {growth >= 0 ? <TrendingUp size={16} strokeWidth={2.5} /> : <TrendingDown size={16} strokeWidth={2.5} />}
+            <span>{Math.abs(growth)}% vs last month</span>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -17,7 +17,8 @@ import {
   Settings,
   X,
   Table,
-  Package
+  Package,
+  BarChart3
 } from 'lucide-react'
 
 const navigation = [
@@ -29,6 +30,7 @@ const navigation = [
 
   { name: 'Create Parcel Bill', href: '/billing/parcel', icon: IndianRupee },
 	{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Item Analysis', href: '/item-analysis', icon: BarChart3 },
   { name: 'Bill History', href: '/billing/history', icon: History },
   
 ]

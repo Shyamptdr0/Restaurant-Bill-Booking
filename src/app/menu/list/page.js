@@ -223,6 +223,7 @@ export default function MenuList() {
                         <TableHead>Name</TableHead>
                         <TableHead>Category</TableHead>
                         <TableHead>Price</TableHead>
+                        <TableHead>Stock</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -233,6 +234,18 @@ export default function MenuList() {
                           <TableCell className="font-medium">{item.name}</TableCell>
                           <TableCell>{item.category}</TableCell>
                           <TableCell>₹{item.price.toFixed(2)}</TableCell>
+                          <TableCell>
+                            {item.track_inventory ? (
+                              <span className={`font-bold ₹{
+                                item.stock_quantity <= 0 ? 'text-red-600' : 
+                                item.stock_quantity <= 5 ? 'text-orange-600' : 'text-gray-900'
+                              }`}>
+                                {item.stock_quantity}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 italic text-xs">N/A</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Button
                               size="sm"

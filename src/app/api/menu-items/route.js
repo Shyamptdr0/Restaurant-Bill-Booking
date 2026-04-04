@@ -95,7 +95,9 @@ export async function POST(request) {
           tax: 5, // Default 5% total tax
           sgst: 2.5, // Default 2.5% SGST
           cgst: 2.5, // Default 2.5% CGST
-          status: status || 'active'
+          status: status || 'active',
+          track_inventory: body.track_inventory || false,
+          stock_quantity: parseInt(body.stock_quantity) || 0
         })
         .select()
         .single()
@@ -122,17 +124,22 @@ export async function PUT(request) {
     }
 
     const { data, error } = await withRetry(async () => {
+      const updatePayload = {
+        name,
+        category,
+        price: parseFloat(price),
+        tax: 5, // Default 5% total tax
+        sgst: 2.5, // Default 2.5% SGST
+        cgst: 2.5, // Default 2.5% CGST
+        status: status || 'active'
+      }
+
+      if (body.track_inventory !== undefined) updatePayload.track_inventory = body.track_inventory
+      if (body.stock_quantity !== undefined) updatePayload.stock_quantity = parseInt(body.stock_quantity) || 0
+
       return await supabase
         .from('menu_items')
-        .update({
-          name,
-          category,
-          price: parseFloat(price),
-          tax: 5, // Default 5% total tax
-          sgst: 2.5, // Default 2.5% SGST
-          cgst: 2.5, // Default 2.5% CGST
-          status: status || 'active'
-        })
+        .update(updatePayload)
         .eq('id', id)
         .select()
         .single()

@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Plus, Trash2, Edit } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Edit, Package, AlertCircle, Search } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 
 const categories = [
@@ -26,11 +27,14 @@ const categories = [
 
 export default function AddMenuItem() {
   const [menuItems, setMenuItems] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     name: '',
     category: '',
     price: '',
-    status: 'active'
+    status: 'active',
+    track_inventory: false,
+    stock_quantity: '0'
   })
   const [loading, setLoading] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
@@ -42,6 +46,13 @@ export default function AddMenuItem() {
   useEffect(() => {
     fetchMenuItems()
   }, [])
+
+  // Smart logic: Auto-enable inventory for specific categories
+  useEffect(() => {
+    if ((formData.category === 'Desserts' || formData.category === 'Beverages') && !editingItem) {
+      setFormData(prev => ({ ...prev, track_inventory: true }));
+    }
+  }, [formData.category, editingItem]);
 
   const fetchMenuItems = async () => {
     try {
@@ -57,6 +68,11 @@ export default function AddMenuItem() {
       setMenuItems([])
     }
   }
+
+  const filteredMenuItems = menuItems.filter(item => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -92,7 +108,9 @@ export default function AddMenuItem() {
         name: '',
         category: '',
         price: '',
-        status: 'active'
+        status: 'active',
+        track_inventory: false,
+        stock_quantity: '0'
       })
       setEditingItem(null)
       
@@ -112,7 +130,9 @@ export default function AddMenuItem() {
       name: item.name,
       category: item.category,
       price: item.price.toString(),
-      status: item.status
+      status: item.status,
+      track_inventory: item.track_inventory || false,
+      stock_quantity: (item.stock_quantity || 0).toString()
     });
     setEditingItem(item);
   };
@@ -262,6 +282,45 @@ export default function AddMenuItem() {
                       </Select>
                     </div>
 
+                    <div className="pt-4 border-t space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-base">Track Inventory</Label>
+                          <p className="text-sm text-gray-500">Enable stock management for this item</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="h-6 w-11 rounded-full bg-gray-200 checked:bg-orange-600 appearance-none cursor-pointer relative after:content-[''] after:absolute after:top-1 after:left-1 after:h-4 after:w-4 after:bg-white after:rounded-full after:transition-all checked:after:left-6"
+                          checked={formData.track_inventory}
+                          onChange={(e) => setFormData({ ...formData, track_inventory: e.target.checked })}
+                        />
+                      </div>
+
+                      {formData.track_inventory && (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                          <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
+                          <div className="relative">
+                            <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                              id="stock_quantity"
+                              type="number"
+                              className="pl-10"
+                              placeholder="0"
+                              value={formData.stock_quantity}
+                              onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                              required={formData.track_inventory}
+                            />
+                          </div>
+                          {(formData.category === 'Desserts' || formData.category === 'Beverages') && (
+                            <p className="text-xs text-orange-600 flex items-center mt-1">
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              Recommended for {formData.category}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex space-x-2">
                       <Button type="submit" disabled={loading} className="flex-1">
                         {loading ? 'Saving...' : editingItem ? 'Update Item' : 'Save Item'}
@@ -276,7 +335,9 @@ export default function AddMenuItem() {
                               name: '',
                               category: '',
                               price: '',
-                              status: 'active'
+                              status: 'active',
+                              track_inventory: false,
+                              stock_quantity: '0'
                             })
                           }}
                         >
@@ -291,47 +352,87 @@ export default function AddMenuItem() {
               {/* Menu Items List */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Menu Items</CardTitle>
-                  <CardDescription>Current menu items with quick actions</CardDescription>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>Menu Items</CardTitle>
+                      <CardDescription>Current menu items with quick actions</CardDescription>
+                    </div>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search menu items..."
+                        className="pl-9 h-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {menuItems.length === 0 ? (
-                      <p className="text-gray-500 text-center py-8">No menu items found</p>
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                    {filteredMenuItems.length === 0 ? (
+                      <p className="text-gray-500 text-center py-8">
+                        {searchTerm ? "No matching items found" : "No menu items found"}
+                      </p>
                     ) : (
-                      menuItems.map((item) => (
+                      filteredMenuItems.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                          className="group flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-xl hover:bg-gray-50 transition-all gap-3"
                         >
-                          <div className="flex-1">
-                            <h4 className="font-medium">{item.name}</h4>
-                            <p className="text-sm text-gray-600">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-gray-900 truncate">{item.name}</h4>
+                            <p className="text-xs text-gray-500 font-medium">
                               {item.category} • ₹{item.price.toFixed(2)}
                             </p>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              size="sm"
-                              variant={item.status === 'active' ? 'default' : 'outline'}
-                              onClick={() => toggleStatus(item)}
-                            >
-                              {item.status === 'active' ? 'Active' : 'Inactive'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEdit(item)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDelete(item.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+
+                          <div className="flex items-center gap-4 sm:gap-6">
+                            {/* Stock Column */}
+                            <div className="min-w-[80px] text-center sm:text-right">
+                              {item.track_inventory ? (
+                                <div className="flex flex-col items-center sm:items-end">
+                                  <span className={`text-sm font-bold ₹{
+                                    item.stock_quantity <= 0 ? 'text-red-500' : 
+                                    item.stock_quantity <= 5 ? 'text-orange-500' : 'text-gray-900'
+                                  }`}>
+                                    {item.stock_quantity}
+                                  </span>
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Stock</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-bold italic text-gray-300 uppercase tracking-widest">N/A</span>
+                              )}
+                            </div>
+
+                            <div className="h-6 w-[1px] bg-gray-100 hidden sm:block" />
+
+                            <div className="flex items-center space-x-1.5">
+                              <Button
+                                size="sm"
+                                variant={item.status === 'active' ? 'default' : 'outline'}
+                                className="h-8 px-3 text-[10px] font-bold uppercase"
+                                onClick={() => toggleStatus(item)}
+                              >
+                                {item.status === 'active' ? 'Active' : 'Inactive'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 w-8 p-0 border-gray-200"
+                                onClick={() => handleEdit(item)}
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 w-8 p-0 border-gray-200 hover:text-red-600 hover:border-red-100 transition-all shadow-sm"
+                                onClick={() => handleDelete(item.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))

@@ -16,7 +16,8 @@ import {
   ChefHat,
   Settings,
   X,
-  Table
+  Table,
+  Package
 } from 'lucide-react'
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
 
   { name: 'Add Menu Item', href: '/menu/add', icon: PlusCircle },
   { name: 'Menu List', href: '/menu/list', icon: Utensils },
+  { name: 'Inventory', href: '/inventory', icon: Package },
 
   { name: 'Create Parcel Bill', href: '/billing/parcel', icon: IndianRupee },
 	{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },

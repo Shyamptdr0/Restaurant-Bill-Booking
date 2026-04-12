@@ -18,6 +18,7 @@ export default function PrintFromTemporary() {
   const [temporaryItems, setTemporaryItems] = useState([])
   const [bill, setBill] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isPrinting, setIsPrinting] = useState(false)
   const [printSettings, setPrintSettings] = useState({})
   const [showCustomize, setShowCustomize] = useState(false)
   const [tempSettings, setTempSettings] = useState({})
@@ -162,18 +163,44 @@ export default function PrintFromTemporary() {
   }
 
   const handlePrint = async () => {
-    if (!bill) {
-      const createdBill = await createFinalBill()
-      if (!createdBill) return
-    }
+    try {
+      setIsPrinting(true)
+      
+      // Preparation delay for UI rendering
+      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000))
+      
+      let finalBill = bill
+      if (!finalBill) {
+        finalBill = await createFinalBill()
+        if (!finalBill) {
+          setIsPrinting(false)
+          return
+        }
+      }
 
-    // Open print dialog and redirect immediately
-    window.print()
-    
-    // Redirect to tables page after printing
-    setTimeout(() => {
-      router.push('/tables')
-    }, 1500)
+      // Wait for minimum time to ensure user sees the spinner
+      await minLoadingTime
+      
+      // Hide spinner so it doesn't appear in print dialog
+      setIsPrinting(false)
+      
+      // Small buffer for React to unmount overlay
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      window.print()
+      
+      // Redirect to tables page after printing
+      setTimeout(() => {
+        router.push('/tables')
+      }, 1000)
+    } catch (error) {
+      console.error('Error in handlePrint:', error)
+      setIsPrinting(false)
+      window.print()
+      setTimeout(() => {
+        router.push('/tables')
+      }, 1000)
+    }
   }
 
   const handleNewBill = () => {
@@ -309,9 +336,22 @@ export default function PrintFromTemporary() {
                     <Settings className="h-4 w-4 mr-2" />
                     Customize
                   </Button>
-                  <Button onClick={handlePrint} className="flex items-center justify-center">
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Bill
+                  <Button 
+                    onClick={handlePrint} 
+                    className="flex items-center justify-center bg-black hover:bg-gray-900 text-white"
+                    disabled={isPrinting}
+                  >
+                    {isPrinting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Preparing...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print Bill
+                      </>
+                    )}
                   </Button>
                   <Button onClick={handleNewBill} variant="outline" className="flex items-center justify-center">
                     <Home className="h-4 w-4 mr-2" />
@@ -614,6 +654,19 @@ export default function PrintFromTemporary() {
           </main>
         </div>
       </div>
+
+      {/* Loading Overlay when printing - Normal UI design */}
+      {isPrinting && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center no-print">
+          <div className="flex flex-col items-center space-y-6">
+            <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-20 w-auto animate-pulse" />
+            <div className="flex flex-col items-center space-y-3">
+              <div className="animate-spin rounded-full h-24 w-24 border-b-2 border-orange-600"></div>
+              <p className="text-orange-600 text-lg font-bold animate-pulse">Preparing Bill...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthGuard>
   )
 }

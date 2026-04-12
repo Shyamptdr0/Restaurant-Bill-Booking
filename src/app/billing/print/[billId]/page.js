@@ -36,9 +36,11 @@ export default function PrintBill() {
       // Auto print after component mounts
       setIsPrinting(true)
       // Give the user 2 seconds to see the preparing screen
-      setTimeout(() => {
-        window.print()
+      setTimeout(async () => {
         setIsPrinting(false)
+        // Wait for overlay to unmount
+        await new Promise(resolve => setTimeout(resolve, 100));
+        window.print()
         // Redirect after auto print
         setTimeout(() => {
           router.push('/tables')
@@ -130,13 +132,13 @@ export default function PrintBill() {
     console.log('handlePrint triggered');
     try {
       setIsPrinting(true)
-      console.log('isPrinting set to true');
+      console.log('isPrinting set to true')
       
-      // Wait a tiny bit to ensure React renders the overlay before we start API calls
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Increased delay to 500ms to ensure the UI has time to render before background tasks
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       // Force a minimum 2-second duration for the spinner
-      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000));
+      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000))
       
       const updateTask = (async () => {
         console.log('Starting bill API updates');
@@ -161,12 +163,15 @@ export default function PrintBill() {
       })();
 
       await Promise.all([minLoadingTime, updateTask]);
-      console.log('All preparation tasks done, opening print dialog');
+      console.log('All preparation tasks done, hiding spinner and opening print dialog');
+      
+      // Hide spinner FIRST, so it's not in the print dialog
+      setIsPrinting(false)
+      
+      // Give React a tiny window to unmount the overlay before window.print() blocks
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       window.print()
-      
-      setIsPrinting(false)
-      console.log('isPrinting set to false');
       
       setTimeout(() => {
         router.push('/tables')
@@ -291,33 +296,8 @@ export default function PrintBill() {
   }
 
   return (
-    <>
-      {/* Loading Overlay when printing - Placed outside of AuthGuard for maximum reliability */}
-      {isPrinting && (
-        <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-[9999] flex flex-col items-center justify-center">
-          <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center space-y-8 border border-orange-100 max-w-md w-full mx-4">
-            <div className="relative scale-110">
-              <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-orange-600"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Printer className="h-12 w-12 text-orange-600 animate-bounce" />
-              </div>
-            </div>
-            <div className="text-center space-y-3">
-              <h3 className="text-3xl font-black text-gray-900 tracking-tighter">PREPARING BILL</h3>
-              <p className="text-gray-600 font-semibold text-lg">Finishing up your receipt...</p>
-              <p className="text-gray-400 text-sm italic">The print dialog will open automatically in a moment.</p>
-            </div>
-            <div className="flex space-x-2">
-              <div className="h-3 w-3 bg-orange-600 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-              <div className="h-3 w-3 bg-orange-600 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-              <div className="h-3 w-3 bg-orange-600 rounded-full animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <AuthGuard>
-        <div className="flex h-screen bg-gray-100 relative">
+    <AuthGuard>
+      <div className="flex h-screen bg-gray-100 relative">
           <Sidebar />
           <div className="flex-1 flex flex-col">
             <Navbar />
@@ -336,17 +316,17 @@ export default function PrintBill() {
                     </Button>
                     <Button 
                       onClick={handlePrint} 
-                      className="flex items-center justify-center p-6 text-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 bg-orange-600 hover:bg-orange-700 disabled:opacity-50"
+                      className="flex items-center justify-center bg-black hover:bg-gray-900 text-white"
                       disabled={isPrinting}
                     >
                       {isPrinting ? (
                         <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                          Preparing Bill...
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Preparing...
                         </>
                       ) : (
                         <>
-                          <Printer className="h-5 w-5 mr-2" />
+                          <Printer className="h-4 w-4 mr-2" />
                           Print Bill
                         </>
                       )}
@@ -652,7 +632,19 @@ export default function PrintBill() {
             </main>
           </div>
         </div>
+
+        {/* Loading Overlay when printing - Normal UI design */}
+        {isPrinting && (
+          <div className="fixed inset-0 bg-white/95 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center no-print">
+            <div className="flex flex-col items-center space-y-6">
+              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-20 w-auto animate-pulse" />
+              <div className="flex flex-col items-center space-y-3">
+                <div className="animate-spin rounded-full h-24 w-24 border-b-2 border-orange-600"></div>
+                <p className="text-orange-600 text-lg font-bold animate-pulse">Preparing Bill...</p>
+              </div>
+            </div>
+          </div>
+        )}
       </AuthGuard>
-    </>
-  )
-}
+    )
+  }

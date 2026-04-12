@@ -18,6 +18,7 @@ export default function PrintBill() {
   const [bill, setBill] = useState(null)
   const [billItems, setBillItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isPrinting, setIsPrinting] = useState(false)
   const [printSettings, setPrintSettings] = useState({})
   const [showCustomize, setShowCustomize] = useState(false)
   const [tempSettings, setTempSettings] = useState({})
@@ -33,13 +34,16 @@ export default function PrintBill() {
   useEffect(() => {
     if (bill && !loading && printSettings.autoPrint) {
       // Auto print after component mounts
+      setIsPrinting(true)
+      // Give the user 2 seconds to see the preparing screen
       setTimeout(() => {
         window.print()
+        setIsPrinting(false)
         // Redirect after auto print
         setTimeout(() => {
           router.push('/tables')
         }, 1000)
-      }, 500)
+      }, 2000)
     }
   }, [bill, loading, printSettings])
 
@@ -123,42 +127,58 @@ export default function PrintBill() {
   }
 
   const handlePrint = async () => {
+    console.log('handlePrint triggered');
     try {
-      // Update bill status to printed
-      await fetch(`/api/bills/${billId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'printed' })
-      })
+      setIsPrinting(true)
+      console.log('isPrinting set to true');
       
-      // Update table status to paid if bill has table_id
-      if (bill && bill.table_id) {
-        await fetch(`/api/tables/${bill.table_id}`, {
+      // Wait a tiny bit to ensure React renders the overlay before we start API calls
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // Force a minimum 2-second duration for the spinner
+      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const updateTask = (async () => {
+        console.log('Starting bill API updates');
+        await fetch(`/api/bills/${billId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: bill.table_name,
-            section: bill.section,
-            status: 'paid'
-          })
+          body: JSON.stringify({ status: 'printed' })
         })
-      }
+        
+        if (bill && bill.table_id) {
+          await fetch(`/api/tables/${bill.table_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: bill.table_name,
+              section: bill.section,
+              status: 'paid'
+            })
+          })
+        }
+        console.log('API updates finished');
+      })();
+
+      await Promise.all([minLoadingTime, updateTask]);
+      console.log('All preparation tasks done, opening print dialog');
       
-      // Open print dialog and redirect immediately
       window.print()
       
-      // Redirect to tables page after printing
+      setIsPrinting(false)
+      console.log('isPrinting set to false');
+      
       setTimeout(() => {
         router.push('/tables')
-      }, 1500)
+      }, 1000)
       
     } catch (error) {
-      console.error('Error updating status before print:', error)
-      // Still print and navigate even if status update fails
+      console.error('Error in handlePrint:', error)
+      setIsPrinting(false)
       window.print()
       setTimeout(() => {
         router.push('/tables')
-      }, 1500)
+      }, 1000)
     }
   }
 
@@ -271,330 +291,368 @@ export default function PrintBill() {
   }
 
   return (
-    <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
-          <Navbar />
-          <main className="flex-1 p-6 overflow-auto">
-            {/* Control Buttons - Hidden when printing */}
-            <div className="no-print mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <Link href="/billing/history" className="flex items-center text-black hover:text-gray-900">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Bill History
-                </Link>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button onClick={handleCustomize} variant="outline" className="flex items-center justify-center">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Customize
-                  </Button>
-                  <Button onClick={handlePrint} className="flex items-center justify-center">
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Bill
-                  </Button>
-                  <Button onClick={handleNewBill} variant="outline" className="flex items-center justify-center">
-                    <Home className="h-4 w-4 mr-2" />
-                    New Bill
-                  </Button>
-                </div>
+    <>
+      {/* Loading Overlay when printing - Placed outside of AuthGuard for maximum reliability */}
+      {isPrinting && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-xl z-[9999] flex flex-col items-center justify-center">
+          <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center space-y-8 border border-orange-100 max-w-md w-full mx-4">
+            <div className="relative scale-110">
+              <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-orange-600"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Printer className="h-12 w-12 text-orange-600 animate-bounce" />
               </div>
             </div>
+            <div className="text-center space-y-3">
+              <h3 className="text-3xl font-black text-gray-900 tracking-tighter">PREPARING BILL</h3>
+              <p className="text-gray-600 font-semibold text-lg">Finishing up your receipt...</p>
+              <p className="text-gray-400 text-sm italic">The print dialog will open automatically in a moment.</p>
+            </div>
+            <div className="flex space-x-2">
+              <div className="h-3 w-3 bg-orange-600 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
+              <div className="h-3 w-3 bg-orange-600 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
+              <div className="h-3 w-3 bg-orange-600 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
-            {/* Customize Panel - Hidden when printing */}
-            {showCustomize && (
+      <AuthGuard>
+        <div className="flex h-screen bg-gray-100 relative">
+          <Sidebar />
+          <div className="flex-1 flex flex-col">
+            <Navbar />
+            <main className="flex-1 p-6 overflow-auto">
+              {/* Control Buttons - Hidden when printing */}
               <div className="no-print mb-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      Customize Print Settings
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {/* Restaurant Information */}
-                      <div className="space-y-4">
-                        <h3 className="font-semibold text-lg">Restaurant Information</h3>
-                        <div>
-                          <Label htmlFor="restaurantName">Restaurant Name</Label>
-                          <Input
-                            id="restaurantName"
-                            value={tempSettings.restaurantName || ''}
-                            onChange={(e) => updateTempSetting('restaurantName', e.target.value)}
-                          />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <Link href="/billing/history" className="flex items-center text-black hover:text-gray-900">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Bill History
+                  </Link>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button onClick={handleCustomize} variant="outline" className="flex items-center justify-center">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Customize
+                    </Button>
+                    <Button 
+                      onClick={handlePrint} 
+                      className="flex items-center justify-center p-6 text-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 bg-orange-600 hover:bg-orange-700 disabled:opacity-50"
+                      disabled={isPrinting}
+                    >
+                      {isPrinting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          Preparing Bill...
+                        </>
+                      ) : (
+                        <>
+                          <Printer className="h-5 w-5 mr-2" />
+                          Print Bill
+                        </>
+                      )}
+                    </Button>
+                    <Button onClick={handleNewBill} variant="outline" className="flex items-center justify-center">
+                      <Home className="h-4 w-4 mr-2" />
+                      New Bill
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customize Panel - Hidden when printing */}
+              {showCustomize && (
+                <div className="no-print mb-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Settings className="h-5 w-5" />
+                        Customize Print Settings
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* Restaurant Information */}
+                        <div className="space-y-4">
+                          <h3 className="font-semibold text-lg">Restaurant Information</h3>
+                          <div>
+                            <Label htmlFor="restaurantName">Restaurant Name</Label>
+                            <Input
+                              id="restaurantName"
+                              value={tempSettings.restaurantName || ''}
+                              onChange={(e) => updateTempSetting('restaurantName', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="address">Address</Label>
+                            <Input
+                              id="address"
+                              value={tempSettings.address || ''}
+                              onChange={(e) => updateTempSetting('address', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="phone">Phone</Label>
+                            <Input
+                              id="phone"
+                              value={tempSettings.phone || ''}
+                              onChange={(e) => updateTempSetting('phone', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="gstNumber">GST Number</Label>
+                            <Input
+                              id="gstNumber"
+                              value={tempSettings.gstNumber || ''}
+                              onChange={(e) => updateTempSetting('gstNumber', e.target.value)}
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <Label htmlFor="address">Address</Label>
-                          <Input
-                            id="address"
-                            value={tempSettings.address || ''}
-                            onChange={(e) => updateTempSetting('address', e.target.value)}
-                          />
+
+                        {/* Print Settings */}
+                        <div className="space-y-4">
+                          <h3 className="font-semibold text-lg">Print Settings</h3>
+                          <div>
+                            <Label htmlFor="paperSize">Paper Size</Label>
+                            <Select value={tempSettings.paperSize || '80mm'} onValueChange={(value) => updateTempSetting('paperSize', value)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select paper size" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="57mm">57mm - Thermal Receipt</SelectItem>
+                                <SelectItem value="80mm">80mm - Thermal Receipt</SelectItem>
+                                <SelectItem value="A4">A4 - Professional Invoice</SelectItem>
+                                <SelectItem value="Letter">Letter - Professional Invoice</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="fontSize">Font Size</Label>
+                            <Select value={tempSettings.fontSize || 'medium'} onValueChange={(value) => updateTempSetting('fontSize', value)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select font size" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="small">Small</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="large">Large</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="headerAlignment">Header Alignment</Label>
+                            <Select value={tempSettings.headerAlignment || 'center'} onValueChange={(value) => updateTempSetting('headerAlignment', value)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select alignment" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="left">Left</SelectItem>
+                                <SelectItem value="center">Center</SelectItem>
+                                <SelectItem value="right">Right</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="itemAlignment">Item Alignment</Label>
+                            <Select value={tempSettings.itemAlignment || 'left'} onValueChange={(value) => updateTempSetting('itemAlignment', value)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select alignment" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="left">Left</SelectItem>
+                                <SelectItem value="center">Center</SelectItem>
+                                <SelectItem value="right">Right</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                        <div>
-                          <Label htmlFor="phone">Phone</Label>
-                          <Input
-                            id="phone"
-                            value={tempSettings.phone || ''}
-                            onChange={(e) => updateTempSetting('phone', e.target.value)}
-                          />
+
+                        {/* Display Options */}
+                        <div className="space-y-4">
+                          <h3 className="font-semibold text-lg">Display Options</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="showLogo"
+                                checked={tempSettings.showLogo || false}
+                                onChange={(e) => updateTempSetting('showLogo', e.target.checked)}
+                              />
+                              <Label htmlFor="showLogo">Show Logo</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="showTax"
+                                checked={tempSettings.showTax || false}
+                                onChange={(e) => updateTempSetting('showTax', e.target.checked)}
+                              />
+                              <Label htmlFor="showTax">Show Tax</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="showTimestamp"
+                                checked={tempSettings.showTimestamp || false}
+                                onChange={(e) => updateTempSetting('showTimestamp', e.target.checked)}
+                              />
+                              <Label htmlFor="showTimestamp">Show Timestamp</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="showPaymentMethod"
+                                checked={tempSettings.showPaymentMethod || false}
+                                onChange={(e) => updateTempSetting('showPaymentMethod', e.target.checked)}
+                              />
+                              <Label htmlFor="showPaymentMethod">Show Payment Method</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="showWatermark"
+                                checked={tempSettings.showWatermark || false}
+                                onChange={(e) => updateTempSetting('showWatermark', e.target.checked)}
+                              />
+                              <Label htmlFor="showWatermark">Show Watermark</Label>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <Label htmlFor="gstNumber">GST Number</Label>
-                          <Input
-                            id="gstNumber"
-                            value={tempSettings.gstNumber || ''}
-                            onChange={(e) => updateTempSetting('gstNumber', e.target.value)}
-                          />
-                        </div>
-              
                       </div>
 
-                      {/* Print Settings */}
-                      <div className="space-y-4">
-                        <h3 className="font-semibold text-lg">Print Settings</h3>
-                        <div>
-                          <Label htmlFor="paperSize">Paper Size</Label>
-                          <Select value={tempSettings.paperSize || '80mm'} onValueChange={(value) => updateTempSetting('paperSize', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select paper size" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="57mm">57mm - Thermal Receipt</SelectItem>
-                              <SelectItem value="80mm">80mm - Thermal Receipt</SelectItem>
-                              <SelectItem value="A4">A4 - Professional Invoice</SelectItem>
-                              <SelectItem value="Letter">Letter - Professional Invoice</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="fontSize">Font Size</Label>
-                          <Select value={tempSettings.fontSize || 'medium'} onValueChange={(value) => updateTempSetting('fontSize', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select font size" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="small">Small</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="large">Large</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="headerAlignment">Header Alignment</Label>
-                          <Select value={tempSettings.headerAlignment || 'center'} onValueChange={(value) => updateTempSetting('headerAlignment', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select alignment" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="left">Left</SelectItem>
-                              <SelectItem value="center">Center</SelectItem>
-                              <SelectItem value="right">Right</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="itemAlignment">Item Alignment</Label>
-                          <Select value={tempSettings.itemAlignment || 'left'} onValueChange={(value) => updateTempSetting('itemAlignment', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select alignment" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="left">Left</SelectItem>
-                              <SelectItem value="center">Center</SelectItem>
-                              <SelectItem value="right">Right</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 mt-6 pt-6 border-t">
+                        <Button onClick={handleSaveSettings} className="flex items-center">
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Settings
+                        </Button>
+                        <Button onClick={handleCancelCustomize} variant="outline">
+                          Cancel
+                        </Button>
                       </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
 
-                      {/* Display Options */}
-                      <div className="space-y-4">
-                        <h3 className="font-semibold text-lg">Display Options</h3>
-                        <div className="space-y-3">
+              {/* Printable Bill Content */}
+              <div className={`${getPaperSizeClass()} mx-auto px-2 sm:px-0 print-only-content`}>
+                <Card className="print-break">
+                  <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()} print-break`} style={{ color: currentSettings.textColor }}>
+                    {/* Restaurant Header */}
+                    <div className={`mb-4 ${getAlignmentClass(currentSettings.headerAlignment)}`}>
+                      {currentSettings.showLogo && (
+                        <div className="flex justify-center mb-2">
                           <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="showLogo"
-                              checked={tempSettings.showLogo || false}
-                              onChange={(e) => updateTempSetting('showLogo', e.target.checked)}
-                            />
-                            <Label htmlFor="showLogo">Show Logo</Label>
+                            <div>
+                              <h1 className="text-sm font-bold">{currentSettings.restaurantName}</h1>
+                              <p className="text-xs text-black">{currentSettings.restaurantTagline || 'Delicious Food, Great Service'}</p>
+                            </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="showTax"
-                              checked={tempSettings.showTax || false}
-                              onChange={(e) => updateTempSetting('showTax', e.target.checked)}
-                            />
-                            <Label htmlFor="showTax">Show Tax</Label>
+                        </div>
+                      )}
+                      <div className="text-xs text-black">
+                        <p>{currentSettings.address}</p>
+                        <p>{currentSettings.phone}</p>
+                        <p>GSTIN: {currentSettings.gstNumber}</p>
+                      </div>
+                    </div>
+
+                    {/* Bill Details */}
+                    <div className="border-t border-b py-2 mb-3">
+                      <div className="flex justify-between items-center mb-1">
+                        <div>
+                          <h2 className="text-sm font-bold">BILL</h2>
+                          <p className="text-xs text-black">Bill No: #{bill.bill_no}</p>
+                          {bill.table_name && (
+                            <p className="text-xs text-black">Table: {bill.table_name} ({bill.section})</p>
+                          )}
+                        </div>
+                        {currentSettings.showTimestamp && (
+                          <div className="text-right">
+                            <p className="text-xs text-black">Date: {new Date(bill.created_at).toLocaleDateString()}</p>
+                            <p className="text-xs text-black">Time: {new Date(bill.created_at).toLocaleTimeString()}</p>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="showTimestamp"
-                              checked={tempSettings.showTimestamp || false}
-                              onChange={(e) => updateTempSetting('showTimestamp', e.target.checked)}
-                            />
-                            <Label htmlFor="showTimestamp">Show Timestamp</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="showPaymentMethod"
-                              checked={tempSettings.showPaymentMethod || false}
-                              onChange={(e) => updateTempSetting('showPaymentMethod', e.target.checked)}
-                            />
-                            <Label htmlFor="showPaymentMethod">Show Payment Method</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="showWatermark"
-                              checked={tempSettings.showWatermark || false}
-                              onChange={(e) => updateTempSetting('showWatermark', e.target.checked)}
-                            />
-                            <Label htmlFor="showWatermark">Show Watermark</Label>
+                        )}
+                      </div>
+                      {currentSettings.showPaymentMethod && (
+                        <div className="mt-1">
+                          <p className="text-xs text-black">Payment: {formatPaymentType(bill.payment_type)}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bill Items */}
+                    <div className="mb-3">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left pb-1">Item</th>
+                            <th className="text-right px-1 pb-1">Qty</th>
+                            <th className="text-right px-1 pb-1">Rate</th>
+                            <th className="text-right px-1 pb-1">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {billItems.map((item, index) => {
+                            const itemTotal = (item.price * item.quantity);
+                            
+                            return (
+                              <tr key={index} className="border-b border-gray-100 print-no-break">
+                                <td className="py-1">{item.item_name || `Item ${index + 1}`}</td>
+                                <td className="text-right px-1">{item.quantity}</td>
+                                <td className="text-right px-1">₹{item.price.toFixed(2)}</td>
+                                <td className="text-right px-1">₹{itemTotal.toFixed(2)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Totals */}
+                    <div className="border-t pt-2">
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between border-b pb-1 mb-1">
+                          <span>Total Items:</span>
+                          <span>{billItems.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Subtotal:</span>
+                          <span>₹{parseFloat(bill.subtotal).toFixed(2)}</span>
+                        </div>
+                        {currentSettings.showTax && (
+                          <>
+                            {bill.service_tax_amount > 0 && (
+                              <div className="flex justify-between">
+                                <span>Service Charge (5%):</span>
+                                <span>₹{parseFloat(bill.service_tax_amount).toFixed(2)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        <div className="border-t pt-1 mt-1">
+                          <div className="flex justify-between font-bold text-sm">
+                            <span>Total:</span>
+                            <span style={{ color: 'black' }}>
+                              ₹{parseFloat(bill.subtotal).toFixed(2)}
+                            </span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 mt-6 pt-6 border-t">
-                      <Button onClick={handleSaveSettings} className="flex items-center">
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Settings
-                      </Button>
-                      <Button onClick={handleCancelCustomize} variant="outline">
-                        Cancel
-                      </Button>
-                    </div>
+                    {currentSettings.showWatermark && (
+                      <div className="text-center mt-2 text-black text-xs">
+                        {currentSettings.watermarkText}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
-            )}
-
-            {/* Printable Bill Content */}
-            <div className={`${getPaperSizeClass()} mx-auto px-2 sm:px-0 print-only-content`}>
-              <Card className="print-break">
-                <CardContent className={`${getPaperSizePadding()} ${getFontSizeClass()} print-break`} style={{ color: currentSettings.textColor }}>
-                  {/* Restaurant Header */}
-                  <div className={`mb-4 ${getAlignmentClass(currentSettings.headerAlignment)}`}>
-                    {currentSettings.showLogo && (
-                      <div className="flex justify-center mb-2">
-                        <div className="flex items-center space-x-2">
-                          <div>
-                            <h1 className="text-sm font-bold">{currentSettings.restaurantName}</h1>
-                            <p className="text-xs text-black">{currentSettings.restaurantTagline || 'Delicious Food, Great Service'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div className="text-xs text-black">
-                      <p>{currentSettings.address}</p>
-                      <p>{currentSettings.phone}</p>
-                      <p>GSTIN: {currentSettings.gstNumber}</p>
-                    </div>
-                  </div>
-
-                  {/* Bill Details */}
-                  <div className="border-t border-b py-2 mb-3">
-                    <div className="flex justify-between items-center mb-1">
-                      <div>
-                        <h2 className="text-sm font-bold">BILL</h2>
-                        <p className="text-xs text-black">Bill No: #{bill.bill_no}</p>
-                        {bill.table_name && (
-                          <p className="text-xs text-black">Table: {bill.table_name} ({bill.section})</p>
-                        )}
-                      </div>
-                      {currentSettings.showTimestamp && (
-                        <div className="text-right">
-                          <p className="text-xs text-black">Date: {new Date(bill.created_at).toLocaleDateString()}</p>
-                          <p className="text-xs text-black">Time: {new Date(bill.created_at).toLocaleTimeString()}</p>
-                        </div>
-                      )}
-                    </div>
-                    {currentSettings.showPaymentMethod && (
-                      <div className="mt-1">
-                        <p className="text-xs text-black">Payment: {formatPaymentType(bill.payment_type)}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bill Items */}
-                  <div className="mb-3">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left pb-1">Item</th>
-                          <th className="text-right px-1 pb-1">Qty</th>
-                          <th className="text-right px-1 pb-1">Rate</th>
-                          <th className="text-right px-1 pb-1">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {billItems.map((item, index) => {
-                          const itemTotal = (item.price * item.quantity);
-                          
-                          return (
-                            <tr key={index} className="border-b border-gray-100 print-no-break">
-                              <td className="py-1">{item.item_name || `Item ${index + 1}`}</td>
-                              <td className="text-right px-1">{item.quantity}</td>
-                              <td className="text-right px-1">₹{item.price.toFixed(2)}</td>
-                              <td className="text-right px-1">₹{itemTotal.toFixed(2)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Totals */}
-                  <div className="border-t pt-2">
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between border-b pb-1 mb-1">
-                        <span>Total Items:</span>
-                        <span>{billItems.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Subtotal:</span>
-                        <span>₹{parseFloat(bill.subtotal).toFixed(2)}</span>
-                      </div>
-                      {currentSettings.showTax && (
-                        <>
-                          {bill.service_tax_amount > 0 && (
-                            <div className="flex justify-between">
-                              <span>Service Charge (5%):</span>
-                              <span>₹{parseFloat(bill.service_tax_amount).toFixed(2)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <div className="border-t pt-1 mt-1">
-                        <div className="flex justify-between font-bold text-sm">
-                          <span>Total:</span>
-                          <span style={{ color: 'black' }}>
-                            ₹{parseFloat(bill.subtotal).toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {currentSettings.showWatermark && (
-                    <div className="text-center mt-2 text-black text-xs">
-                      {currentSettings.watermarkText}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </main>
+            </main>
+          </div>
         </div>
-      </div>
-    </AuthGuard>
+      </AuthGuard>
+    </>
   )
 }

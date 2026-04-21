@@ -25,7 +25,7 @@ export function Navbar() {
 
   useEffect(() => {
     const getUser = () => {
-      const session = localStorage.getItem('supabase_session')
+      const session = sessionStorage.getItem('supabase_session')
       if (session) {
         try {
           const parsedSession = JSON.parse(session)
@@ -58,7 +58,7 @@ export function Navbar() {
       console.error('Logout error:', error)
     }
     
-    localStorage.removeItem('supabase_session')
+    sessionStorage.removeItem('supabase_session')
     window.location.href = '/login'
   }
 

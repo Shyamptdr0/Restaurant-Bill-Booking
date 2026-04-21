@@ -32,6 +32,31 @@ function BillingPageContent() {
     }
   }, [tableId])
 
+  // Helper function to group items by item_id or name to prevent duplicates
+  const groupItems = (items) => {
+    if (!items || !Array.isArray(items)) return []
+    
+    const grouped = {}
+    items.forEach(item => {
+      // Use item_id as primary key, fallback to id, then item_name, then name
+      const itemId = String(item.item_id || item.id || item.item_name || item.name)
+      
+      if (grouped[itemId]) {
+        grouped[itemId].quantity = (parseInt(grouped[itemId].quantity) || 0) + (parseInt(item.quantity) || 0)
+        grouped[itemId].total = (parseFloat(grouped[itemId].price) || 0) * grouped[itemId].quantity
+      } else {
+        grouped[itemId] = { 
+          ...item,
+          quantity: parseInt(item.quantity) || 0,
+          price: parseFloat(item.price) || 0,
+          total: (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)
+        }
+      }
+    })
+    
+    return Object.values(grouped)
+  }
+
   const fetchExistingBill = async () => {
     try {
       const response = await fetch(`/api/bills?table_id=${tableId}&status=running&_t=${Date.now()}`)
@@ -45,14 +70,15 @@ function BillingPageContent() {
           if (itemsResponse.ok) {
             const itemsData = await itemsResponse.json()
             if (itemsData.data) {
-              setCartItems(itemsData.data.map(item => ({
+              const items = itemsData.data.map(item => ({
                 ...item,
                 id: item.item_id,
                 name: item.item_name,
                 category: item.item_category,
                 price: item.price,
                 quantity: item.quantity
-              })))
+              }))
+              setCartItems(groupItems(items))
             }
           }
         }

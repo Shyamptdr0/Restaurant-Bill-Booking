@@ -51,7 +51,7 @@ export function Sidebar() {
       console.error('Logout error:', error)
     }
     
-    localStorage.removeItem('supabase_session')
+    sessionStorage.removeItem('supabase_session')
     window.location.href = '/login'
   }
 

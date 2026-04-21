@@ -62,7 +62,7 @@ export default function PrintBill() {
   }, [])
 
   const loadPrintSettings = () => {
-    const savedSettings = localStorage.getItem('billPrintSettings')
+    const savedSettings = sessionStorage.getItem('billPrintSettings')
     if (savedSettings) {
       setPrintSettings(JSON.parse(savedSettings))
     } else {
@@ -96,6 +96,31 @@ export default function PrintBill() {
     return (item.price * item.quantity) * serviceTaxRate;
   };
 
+  // Helper function to group items by item_id or name to prevent duplicates
+  const groupItems = (items) => {
+    if (!items || !Array.isArray(items)) return []
+    
+    const grouped = {}
+    items.forEach(item => {
+      // Use item_id as primary key, fallback to id, then item_name, then name
+      const itemId = String(item.item_id || item.id || item.item_name || item.name)
+      
+      if (grouped[itemId]) {
+        grouped[itemId].quantity = (parseInt(grouped[itemId].quantity) || 0) + (parseInt(item.quantity) || 0)
+        grouped[itemId].total = (parseFloat(grouped[itemId].price) || 0) * grouped[itemId].quantity
+      } else {
+        grouped[itemId] = { 
+          ...item,
+          quantity: parseInt(item.quantity) || 0,
+          price: parseFloat(item.price) || 0,
+          total: (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)
+        }
+      }
+    })
+    
+    return Object.values(grouped)
+  }
+
   const fetchBillDetails = async () => {
     try {
       const response = await fetch(`/api/bills/${billId}?_t=${Date.now()}`)
@@ -106,19 +131,7 @@ export default function PrintBill() {
       }
 
       setBill(result.data)
-      
-      const items = result.data.items || []
-      const groupedItems = {}
-      items.forEach(item => {
-        const itemId = String(item.item_id || item.id || item.name)
-        if (groupedItems[itemId]) {
-          groupedItems[itemId].quantity += item.quantity
-        } else {
-          groupedItems[itemId] = { ...item }
-        }
-      })
-      
-      setBillItems(Object.values(groupedItems))
+      setBillItems(groupItems(result.data.items || []))
     } catch (error) {
       console.error('Error fetching bill details:', error)
       alert('Error loading bill: ' + error.message)
@@ -201,7 +214,7 @@ export default function PrintBill() {
 
   const handleSaveSettings = () => {
     setPrintSettings(tempSettings)
-    localStorage.setItem('billPrintSettings', JSON.stringify(tempSettings))
+    sessionStorage.setItem('billPrintSettings', JSON.stringify(tempSettings))
     setShowCustomize(false)
   }
 

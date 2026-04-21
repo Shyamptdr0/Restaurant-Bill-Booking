@@ -31,7 +31,7 @@ export default function ViewBill() {
   }, [billId])
 
   const loadPrintSettings = () => {
-    const savedSettings = localStorage.getItem('billPrintSettings')
+    const savedSettings = sessionStorage.getItem('billPrintSettings')
     if (savedSettings) {
       setPrintSettings(JSON.parse(savedSettings))
     } else {
@@ -59,6 +59,31 @@ export default function ViewBill() {
     }
   }
 
+  // Helper function to group items by item_id or name to prevent duplicates
+  const groupItems = (items) => {
+    if (!items || !Array.isArray(items)) return []
+    
+    const grouped = {}
+    items.forEach(item => {
+      // Use item_id as primary key, fallback to id, then item_name, then name
+      const itemId = String(item.item_id || item.id || item.item_name || item.name)
+      
+      if (grouped[itemId]) {
+        grouped[itemId].quantity = (parseInt(grouped[itemId].quantity) || 0) + (parseInt(item.quantity) || 0)
+        grouped[itemId].total = (parseFloat(grouped[itemId].price) || 0) * grouped[itemId].quantity
+      } else {
+        grouped[itemId] = { 
+          ...item,
+          quantity: parseInt(item.quantity) || 0,
+          price: parseFloat(item.price) || 0,
+          total: (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)
+        }
+      }
+    })
+    
+    return Object.values(grouped)
+  }
+
   const fetchBillDetails = async () => {
     try {
       const response = await fetch(`/api/bills/${billId}`)
@@ -69,7 +94,7 @@ export default function ViewBill() {
       }
 
       setBill(result.data)
-      setBillItems(result.data.items || [])
+      setBillItems(groupItems(result.data.items || []))
     } catch (error) {
       console.error('Error fetching bill details:', error)
       alert('Error loading bill: ' + error.message)

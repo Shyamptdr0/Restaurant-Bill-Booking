@@ -38,9 +38,9 @@ export default function LoginPage() {
         throw new Error(result.error)
       }
 
-      // Store session in localStorage
+      // Store session in sessionStorage
       if (result.data.session) {
-        localStorage.setItem('supabase_session', JSON.stringify(result.data.session))
+        sessionStorage.setItem('supabase_session', JSON.stringify(result.data.session))
         router.push('/tables')
       } else {
         throw new Error('No session received')

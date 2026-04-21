@@ -35,7 +35,7 @@ export default function PrintFromTemporary() {
   }, [tableId])
 
   const loadPrintSettings = () => {
-    const savedSettings = localStorage.getItem('billPrintSettings')
+    const savedSettings = sessionStorage.getItem('billPrintSettings')
     if (savedSettings) {
       setPrintSettings(JSON.parse(savedSettings))
     } else {
@@ -63,6 +63,31 @@ export default function PrintFromTemporary() {
     }
   }
 
+  // Helper function to group items by item_id or name to prevent duplicates
+  const groupItems = (items) => {
+    if (!items || !Array.isArray(items)) return []
+    
+    const grouped = {}
+    items.forEach(item => {
+      // Use item_id as primary key, fallback to id, then item_name, then name
+      const itemId = String(item.item_id || item.id || item.item_name || item.name)
+      
+      if (grouped[itemId]) {
+        grouped[itemId].quantity = (parseInt(grouped[itemId].quantity) || 0) + (parseInt(item.quantity) || 0)
+        grouped[itemId].total = (parseFloat(grouped[itemId].price) || 0) * grouped[itemId].quantity
+      } else {
+        grouped[itemId] = { 
+          ...item,
+          quantity: parseInt(item.quantity) || 0,
+          price: parseFloat(item.price) || 0,
+          total: (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)
+        }
+      }
+    })
+    
+    return Object.values(grouped)
+  }
+
   const fetchTemporaryItems = async () => {
     try {
       const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${Date.now()}`)
@@ -73,18 +98,7 @@ export default function PrintFromTemporary() {
       }
 
       if (data.data && data.data.length > 0) {
-        // Group items by item_id to handle potential duplicates
-        const groupedItems = {}
-        data.data.forEach(item => {
-          const itemId = String(item.item_id)
-          if (groupedItems[itemId]) {
-            groupedItems[itemId].quantity += item.quantity
-            groupedItems[itemId].total = groupedItems[itemId].price * groupedItems[itemId].quantity
-          } else {
-            groupedItems[itemId] = { ...item }
-          }
-        })
-        setTemporaryItems(Object.values(groupedItems))
+        setTemporaryItems(groupItems(data.data))
       } else {
         throw new Error('No temporary items found for this table')
       }
@@ -136,7 +150,11 @@ export default function PrintFromTemporary() {
         throw new Error(billResult.error)
       }
 
-      setBill(billResult.data)
+      const finalBillData = billResult.data
+      if (finalBillData && finalBillData.items) {
+        finalBillData.items = groupItems(finalBillData.items)
+      }
+      setBill(finalBillData)
 
       // Update table status to paid
       await fetch(`/api/tables/${tableId}`, {
@@ -217,7 +235,7 @@ export default function PrintFromTemporary() {
 
   const handleSaveSettings = () => {
     setPrintSettings(tempSettings)
-    localStorage.setItem('billPrintSettings', JSON.stringify(tempSettings))
+    sessionStorage.setItem('billPrintSettings', JSON.stringify(tempSettings))
     setShowCustomize(false)
   }
 
@@ -266,7 +284,10 @@ export default function PrintFromTemporary() {
 
   // Use tempSettings if customize panel is open, otherwise use saved printSettings
   const currentSettings = showCustomize ? tempSettings : printSettings
-  const displayBill = bill || {
+  const displayBill = bill ? {
+    ...bill,
+    items: groupItems(bill.items)
+  } : {
     bill_no: 'TEMP',
     created_at: new Date().toISOString(),
     table_name: tableName,

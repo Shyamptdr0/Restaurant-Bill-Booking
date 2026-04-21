@@ -10,7 +10,7 @@ export function AuthGuard({ children }) {
 
   useEffect(() => {
     const checkAuth = () => {
-      const session = localStorage.getItem('supabase_session')
+      const session = sessionStorage.getItem('supabase_session')
       
       if (!session) {
         router.push('/login')

@@ -10,29 +10,53 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
     const month = searchParams.get('month') // Format: YYYY-MM
+    const startDateParam = searchParams.get('startDate')
+    const endDateParam = searchParams.get('endDate')
 
     if (!month) {
       return NextResponse.json({ error: 'Month parameter is required' }, { status: 400 })
     }
 
-    let startDate = new Date()
+    let startDate, endDate;
     const [year, monthNum] = month.split('-').map(Number)
-    startDate = new Date(year, monthNum - 1, 1)
-    startDate.setHours(0, 0, 0, 0)
     
-    const endDate = new Date(startDate)
-    endDate.setMonth(endDate.getMonth() + 1)
-    endDate.setDate(0) // Last day of the month
-    endDate.setHours(23, 59, 59, 999)
+    if (startDateParam && endDateParam) {
+      startDate = new Date(startDateParam)
+      endDate = new Date(endDateParam)
+    } else {
+      startDate = new Date(year, monthNum - 1, 1)
+      startDate.setHours(0, 0, 0, 0)
+      
+      endDate = new Date(startDate)
+      endDate.setMonth(endDate.getMonth() + 1)
+      endDate.setDate(0) // Last day of the month
+      endDate.setHours(23, 59, 59, 999)
+    }
 
-    // Get all bills for the month to determine which days had sales
-    const { data: bills, error: billsError } = await supabase
-      .from('bills')
-      .select('id, created_at, total_amount')
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString())
+    // Get all bills for the month in batches to determine which days had sales
+    let bills = []
+    let hasMore = true
+    let offset = 0
+    const batchSize = 1000
 
-    if (billsError) throw billsError
+    while (hasMore) {
+      const { data, error: billsError } = await supabase
+        .from('bills')
+        .select('id, created_at, total_amount')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .range(offset, offset + batchSize - 1)
+
+      if (billsError) throw billsError
+
+      if (data && data.length > 0) {
+        bills = bills.concat(data)
+        offset += batchSize
+        hasMore = data.length === batchSize
+      } else {
+        hasMore = false
+      }
+    }
 
     // Create a map of days with sales data
     const dayStatus = {}

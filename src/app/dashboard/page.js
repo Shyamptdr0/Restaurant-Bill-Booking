@@ -257,11 +257,15 @@ export default function Dashboard() {
   const fetchDashboardData = async (showSpinner = false) => {
     // 1. Immediate local calculation to make it "fast"
     if (allBills.length > 0) {
-      const monthStr = currentMonth.toISOString().slice(0, 7)
+      const localYear = currentMonth.getFullYear()
+      const localMonthNum = currentMonth.getMonth()
+      const localStart = new Date(localYear, localMonthNum, 1)
+      const localEnd = new Date(localYear, localMonthNum + 1, 0, 23, 59, 59, 999)
+
       const currentMonthBills = allBills.filter(bill => {
         if (!bill.created_at) return false
         const billDate = new Date(bill.created_at)
-        return billDate.toISOString().slice(0, 7) === monthStr
+        return billDate >= localStart && billDate <= localEnd
       })
       
       const localRevenue = currentMonthBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
@@ -282,8 +286,14 @@ export default function Dashboard() {
       setRefreshing(true)
 
       console.log('Dashboard: Fetching dashboard data...')
-      const month = currentMonth.toISOString().slice(0, 7) // YYYY-MM format
-      console.log('Dashboard: Fetching for month:', month)
+      const localYear = currentMonth.getFullYear()
+      const localMonthNum = currentMonth.getMonth()
+      const localStart = new Date(localYear, localMonthNum, 1)
+      const localEnd = new Date(localYear, localMonthNum + 1, 0, 23, 59, 59, 999)
+      const monthStr = `${localYear}-${String(localMonthNum + 1).padStart(2, '0')}`
+      const startDateIso = localStart.toISOString()
+      const endDateIso = localEnd.toISOString()
+      console.log('Dashboard: Fetching for month:', monthStr)
 
       // Fetch bills using direct API call
       const response = await fetch('/api/bills')
@@ -298,7 +308,7 @@ export default function Dashboard() {
       const currentMonthBills = allBills.filter(bill => {
         if (!bill.created_at) return false
         const billDate = new Date(bill.created_at)
-        return billDate.toISOString().slice(0, 7) === month
+        return billDate >= localStart && billDate <= localEnd
       })
 
       // Calculate today's stats from local bills
@@ -322,9 +332,9 @@ export default function Dashboard() {
         try {
           const [dashboardResponse, monthlyResponse, topSellingResponse, calendarStatusResponse, menuItemsResponse] = await Promise.all([
             fetch('/api/dashboard'),
-            fetch(`/api/monthly-stats?month=${month}`),
-            fetch(`/api/top-selling?month=${month}&limit=5`),
-            fetch(`/api/calendar-status?month=${month}`),
+            fetch(`/api/monthly-stats?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`),
+            fetch(`/api/top-selling?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}&limit=5`),
+            fetch(`/api/calendar-status?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`),
             fetch('/api/menu-items')
           ])
 

@@ -34,6 +34,29 @@ function ParcelBillContent() {
 
   const fetchMenuItems = async () => {
     try {
+      // 1. Try to load from cache first for instant loading
+      if (typeof window !== 'undefined') {
+        const cachedMenu = localStorage.getItem('cached_menu_items')
+        if (cachedMenu) {
+          try {
+            const parsedMenu = JSON.parse(cachedMenu)
+            if (Array.isArray(parsedMenu) && parsedMenu.length > 0) {
+              setMenuItems(parsedMenu)
+              
+              // Extract unique categories from cached items
+              const uniqueCategories = [...new Set(parsedMenu.map(item => item.category).filter(Boolean))]
+              setCategories(uniqueCategories)
+              
+              // Hide loading spinner immediately for instant UI render
+              setLoadingItems(false)
+            }
+          } catch (e) {
+            console.error('Error parsing cached menu:', e)
+          }
+        }
+      }
+
+      // 2. Fetch fresh data from API
       const response = await fetch('/api/menu-items')
       const result = await response.json()
       const allMenuItems = result.data || []
@@ -43,8 +66,13 @@ function ParcelBillContent() {
       setMenuItems(activeMenuItems)
       
       // Extract unique categories from active items
-      const uniqueCategories = [...new Set(activeMenuItems?.map(item => item.category) || [])]
+      const uniqueCategories = [...new Set(activeMenuItems.map(item => item.category).filter(Boolean))]
       setCategories(uniqueCategories)
+
+      // Save to cache for next time
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cached_menu_items', JSON.stringify(activeMenuItems))
+      }
     } catch (error) {
       console.error('Error fetching menu items:', error)
     } finally {

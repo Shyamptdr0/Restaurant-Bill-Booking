@@ -35,17 +35,17 @@ export default function PrintBill() {
     if (bill && !loading && printSettings.autoPrint) {
       // Auto print after component mounts
       setIsPrinting(true)
-      // Give the user 2 seconds to see the preparing screen
+      // Give the user 200ms to see the preparing screen
       setTimeout(async () => {
         setIsPrinting(false)
         // Wait for overlay to unmount
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
         window.print()
         // Redirect after auto print
         setTimeout(() => {
           router.push('/tables')
-        }, 1000)
-      }, 2000)
+        }, 500)
+      }, 200)
     }
   }, [bill, loading, printSettings])
 
@@ -147,22 +147,21 @@ export default function PrintBill() {
       setIsPrinting(true)
       console.log('isPrinting set to true')
       
-      // Increased delay to 500ms to ensure the UI has time to render before background tasks
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Brief delay to allow print overlay/spinner UI to render
+      await new Promise(resolve => setTimeout(resolve, 100))
       
-      // Force a minimum 2-second duration for the spinner
-      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000))
-      
-      const updateTask = (async () => {
-        console.log('Starting bill API updates');
-        await fetch(`/api/bills/${billId}`, {
+      // Start API updates in parallel
+      const updatePromises = [
+        fetch(`/api/bills/${billId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'printed' })
         })
-        
-        if (bill && bill.table_id) {
-          await fetch(`/api/tables/${bill.table_id}`, {
+      ]
+      
+      if (bill && bill.table_id) {
+        updatePromises.push(
+          fetch(`/api/tables/${bill.table_id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -171,24 +170,23 @@ export default function PrintBill() {
               status: 'paid'
             })
           })
-        }
-        console.log('API updates finished');
-      })();
-
-      await Promise.all([minLoadingTime, updateTask]);
-      console.log('All preparation tasks done, hiding spinner and opening print dialog');
+        )
+      }
+      
+      await Promise.all(updatePromises);
+      console.log('API updates finished');
       
       // Hide spinner FIRST, so it's not in the print dialog
       setIsPrinting(false)
       
       // Give React a tiny window to unmount the overlay before window.print() blocks
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       window.print()
       
       setTimeout(() => {
         router.push('/tables')
-      }, 1000)
+      }, 500)
       
     } catch (error) {
       console.error('Error in handlePrint:', error)
@@ -196,7 +194,7 @@ export default function PrintBill() {
       window.print()
       setTimeout(() => {
         router.push('/tables')
-      }, 1000)
+      }, 500)
     }
   }
 

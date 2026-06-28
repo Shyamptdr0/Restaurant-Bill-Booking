@@ -296,7 +296,7 @@ export default function Dashboard() {
       console.log('Dashboard: Fetching for month:', monthStr)
 
       // Fetch bills using direct API call
-      const response = await fetch('/api/bills')
+      const response = await fetch('/api/bills?fetch_all=true')
       console.log('Dashboard: Response status:', response.status)
       const result = await response.json()
       console.log('Dashboard: API Response:', result)

@@ -152,6 +152,8 @@ export async function PUT(request) {
         .eq('table_id', table_id)
     })
 
+    if (fetchError) throw fetchError
+
     // Process updates: add new items, update existing ones, remove deleted ones
     // First, consolidate the incoming items list to prevent duplicates
     const consolidatedItems = {}
@@ -165,57 +167,36 @@ export async function PUT(request) {
     })
 
     const itemsToProcess = Object.values(consolidatedItems)
-    const incomingItemIds = itemsToProcess.map(item => item.id || item.item_id)
-    const existingItemIds = existingItems.map(item => item.item_id)
 
-    // Remove items that are no longer in the cart
-    const itemsToRemove = existingItemIds.filter(id => !incomingItemIds.includes(id))
-    if (itemsToRemove.length > 0) {
-      await withRetry(async () => {
+    // Clear existing temporary items first (bulk delete)
+    await withRetry(async () => {
+      return await supabase
+        .from('temporary_items')
+        .delete()
+        .eq('table_id', table_id)
+    })
+
+    // Bulk insert new/updated items
+    const tempItems = itemsToProcess.map(item => ({
+      table_id,
+      table_name: body.table_name || existingItems?.[0]?.table_name || null,
+      section: body.section || existingItems?.[0]?.section || null,
+      item_id: item.id || item.item_id,
+      item_name: item.name || item.item_name,
+      item_category: item.category || item.item_category,
+      quantity: item.quantity,
+      price: item.price,
+      total: item.price * item.quantity,
+      created_at: new Date().toISOString()
+    }))
+
+    if (tempItems.length > 0) {
+      const { error: insertError } = await withRetry(async () => {
         return await supabase
           .from('temporary_items')
-          .delete()
-          .eq('table_id', table_id)
-          .in('item_id', itemsToRemove)
+          .insert(tempItems)
       })
-    }
-
-    // Add or update items
-    for (const item of itemsToProcess) {
-      const existingItem = existingItems.find(existing => existing.item_id === item.id)
-      
-      if (existingItem) {
-        // Update existing item
-        await withRetry(async () => {
-          return await supabase
-            .from('temporary_items')
-            .update({
-              quantity: item.quantity,
-              total: item.price * item.quantity,
-              updated_at: new Date().toISOString()
-            })
-            .eq('table_id', table_id)
-            .eq('item_id', item.id)
-        })
-      } else {
-        // Add new item
-        await withRetry(async () => {
-          return await supabase
-            .from('temporary_items')
-            .insert({
-              table_id,
-              table_name: body.table_name || existingItems[0]?.table_name || null,
-              section: body.section || existingItems[0]?.section || null,
-              item_id: item.id,
-              item_name: item.name,
-              item_category: item.category,
-              quantity: item.quantity,
-              price: item.price,
-              total: item.price * item.quantity,
-              created_at: new Date().toISOString()
-            })
-        })
-      }
+      if (insertError) throw insertError
     }
 
     // Fetch updated items

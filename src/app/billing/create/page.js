@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,11 +34,23 @@ function CreateBillContent() {
   const [loadingItems, setLoadingItems] = useState(true)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const router = useRouter()
+  const syncTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     fetchMenuItems()
+    setCart([]) // Reset cart state when tableId changes to prevent leaking items from previous table/bill
     if (tableId) {
       fetchTemporaryItems()
+    } else {
+      setCart([])
     }
   }, [tableId])
 
@@ -82,15 +94,43 @@ function CreateBillContent() {
           
           // Convert grouped items back to array
           setCart(Object.values(groupedItems))
+        } else {
+          setCart([]) // Clear cart if no temporary items found in DB
         }
+      } else {
+        setCart([]) // Clear cart on API error response
       }
     } catch (error) {
       console.error('Error fetching temporary items:', error)
+      setCart([]) // Clear cart on exception
     }
   }
 
   const fetchMenuItems = async () => {
     try {
+      // 1. Try to load from cache first for instant loading
+      if (typeof window !== 'undefined') {
+        const cachedMenu = localStorage.getItem('cached_menu_items')
+        if (cachedMenu) {
+          try {
+            const parsedMenu = JSON.parse(cachedMenu)
+            if (Array.isArray(parsedMenu) && parsedMenu.length > 0) {
+              setMenuItems(parsedMenu)
+              
+              // Extract unique categories from cached items
+              const uniqueCategories = [...new Set(parsedMenu.map(item => item.category).filter(Boolean))]
+              setCategories(uniqueCategories)
+              
+              // Hide loading spinner immediately for instant UI render
+              setLoadingItems(false)
+            }
+          } catch (e) {
+            console.error('Error parsing cached menu:', e)
+          }
+        }
+      }
+
+      // 2. Fetch fresh data from API in background/first load
       const response = await fetch('/api/menu-items')
       const result = await response.json()
       const allMenuItems = result.data || []
@@ -100,8 +140,13 @@ function CreateBillContent() {
       setMenuItems(activeMenuItems)
       
       // Extract unique categories from active items
-      const uniqueCategories = [...new Set(activeMenuItems?.map(item => item.category) || [])]
+      const uniqueCategories = [...new Set(activeMenuItems.map(item => item.category).filter(Boolean))]
       setCategories(uniqueCategories)
+      
+      // Save to cache for next time
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cached_menu_items', JSON.stringify(activeMenuItems))
+      }
     } catch (error) {
       console.error('Error fetching menu items:', error)
     } finally {
@@ -176,33 +221,39 @@ function CreateBillContent() {
     })
   }
 
-  const syncToDatabase = async (cartItems) => {
+  const syncToDatabase = (cartItems) => {
     if (!tableId) return
     
-    try {
-      const response = await fetch('/api/temporary-items', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          table_id: tableId,
-          table_name: tableName,
-          section: section,
-          items: cartItems.map(item => ({
-            id: item.id,
-            name: item.name,
-            category: item.category,
-            price: item.price,
-            quantity: item.quantity
-          }))
-        })
-      })
-      
-      if (!response.ok) {
-        console.error('Failed to sync items to database')
-      }
-    } catch (error) {
-      console.error('Error syncing items:', error)
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current)
     }
+    
+    syncTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/temporary-items', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            table_id: tableId,
+            table_name: tableName,
+            section: section,
+            items: cartItems.map(item => ({
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              price: item.price,
+              quantity: item.quantity
+            }))
+          })
+        })
+        
+        if (!response.ok) {
+          console.error('Failed to sync items to database')
+        }
+      } catch (error) {
+        console.error('Error syncing items:', error)
+      }
+    }, 300) // 300ms debounce
   }
 
   // Helper function to round up to next integer
@@ -318,6 +369,10 @@ function CreateBillContent() {
     }
 
     setLoading(true)
+    
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current)
+    }
 
     try {
       // Save items to temporary storage in database

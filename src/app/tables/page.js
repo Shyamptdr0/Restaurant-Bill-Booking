@@ -67,15 +67,15 @@ export default function TablesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!formData.section) {
       alert('Please select a section for the table')
       return
     }
-    
+
     const url = editingTable ? `/api/tables/${editingTable.id}` : '/api/tables'
     const method = editingTable ? 'PUT' : 'POST'
-    
+
     try {
       const response = await fetch(url, {
         method,
@@ -116,14 +116,14 @@ export default function TablesPage() {
 
   const handlePrintBill = async () => {
     if (!selectedTable) return
-    
+
     try {
       // Check if there are temporary items for this table
       const response = await fetch(`/api/temporary-items?table_id=${selectedTable.id}`)
-      
+
       if (response.ok) {
         const data = await response.json()
-        
+
         if (data.data && data.data.length > 0) {
           // Navigate to print-from-temporary page
           router.push(`/billing/print-temporary/${selectedTable.id}?tableName=${encodeURIComponent(selectedTable.name)}&section=${encodeURIComponent(selectedTable.section)}`)
@@ -155,7 +155,7 @@ export default function TablesPage() {
             status: 'blank'
           })
         })
-        
+
         fetchTables()
         setIsActionModalOpen(false)
         setIsResetConfirmOpen(false)
@@ -180,12 +180,12 @@ export default function TablesPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'settled' })
             })
-            
+
             // Clear temporary items from database
             await fetch(`/api/temporary-items?table_id=${selectedTable.id}`, {
               method: 'DELETE'
             })
-            
+
             // Update table status to blank (available for new customers)
             await fetch(`/api/tables/${selectedTable.id}`, {
               method: 'PUT',
@@ -196,7 +196,7 @@ export default function TablesPage() {
                 status: 'blank'
               })
             })
-            
+
             fetchTables()
             setIsActionModalOpen(false)
           }
@@ -261,7 +261,7 @@ export default function TablesPage() {
   return (
     <AuthGuard>
       <div className="flex h-screen bg-gray-100">
-         {/* Desktop Sidebar  */}
+        {/* Desktop Sidebar  */}
         <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
           <Sidebar />
         </div>
@@ -298,9 +298,9 @@ export default function TablesPage() {
                     <form onSubmit={handleSubmit} className="space-y-5">
                       <div>
                         <Label htmlFor="section" className="text-sm font-medium text-gray-700">Section</Label>
-                        <Select 
-                          value={formData.section} 
-                          onValueChange={(value) => setFormData({...formData, section: value})}
+                        <Select
+                          value={formData.section}
+                          onValueChange={(value) => setFormData({ ...formData, section: value })}
                         >
                           <SelectTrigger className="border-gray-300 h-11">
                             <SelectValue placeholder="Select section" />
@@ -317,7 +317,7 @@ export default function TablesPage() {
                         <Input
                           id="name"
                           value={formData.name}
-                          onChange={(e) => setFormData({...formData, name: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                           placeholder="e.g., Table 1, S1"
                           className="border-gray-300 h-11"
                           required
@@ -340,7 +340,7 @@ export default function TablesPage() {
                   </DialogContent>
                 </Dialog>
               </div>
-              
+
               {/* Legend */}
               <div className="flex items-center justify-center mb-6 space-x-4 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
@@ -394,68 +394,68 @@ export default function TablesPage() {
                     const sectionTables = tables
                       .filter(table => (table.section || 'Unassigned') === sectionName)
                       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // Sort by creation date
-                    
+
                     if (sectionTables.length === 0) return null
-                    
+
                     return (
                       <div key={sectionName} className="bg-gray-50 border border-gray-200 rounded-xl p-5">
                         <h3 className="text-base font-semibold text-gray-800 mb-4">{sectionName}</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 max-w-full mx-auto">
                           {sectionTables.map((table) => (
-                          <div
-                            key={table.id}
-                            className={`relative h-24 w-32 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-105 flex items-center justify-center ${getStatusColor(
-                              table.status
-                            )}`}
-                            onClick={() => handleTableClick(table)}
-                          >
-                            <div className="text-center">
-                              <div className="text-sm font-semibold">{table.name}</div>
-                            </div>
-                            
-                            {/* Status Indicators */}
-                            {table.status === 'running' && (
-                              <div className="absolute top-2 right-2">
-                                <div className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-sm"></div>
-                              </div>
-                            )}
-                            
-                            {table.status === 'printed' && (
-                              <div className="absolute top-2 right-2">
-                                <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
-                              </div>
-                            )}
-                            
-                            {table.status === 'paid' && (
-                              <div className="absolute top-2 right-2">
-                                <div className="w-3 h-3 bg-amber-500 rounded-full border-2 border-white shadow-sm"></div>
-                              </div>
-                            )}
-
-                            {table.status === 'running_kot' && (
-                              <div className="absolute top-2 right-2">
-                                <div className="w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow-sm"></div>
-                              </div>
-                            )}
-                            
-                            {/* Delete Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDelete(table.id)
-                              }}
-                              className="absolute bottom-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 hover:opacity-100 transition-opacity"
+                            <div
+                              key={table.id}
+                              className={`relative h-24 w-32 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-105 flex items-center justify-center ${getStatusColor(
+                                table.status
+                              )}`}
+                              onClick={() => handleTableClick(table)}
                             >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="text-center">
+                                <div className="text-sm font-semibold">{table.name}</div>
+                              </div>
+
+                              {/* Status Indicators */}
+                              {table.status === 'running' && (
+                                <div className="absolute top-2 right-2">
+                                  <div className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-sm"></div>
+                                </div>
+                              )}
+
+                              {table.status === 'printed' && (
+                                <div className="absolute top-2 right-2">
+                                  <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
+                                </div>
+                              )}
+
+                              {table.status === 'paid' && (
+                                <div className="absolute top-2 right-2">
+                                  <div className="w-3 h-3 bg-amber-500 rounded-full border-2 border-white shadow-sm"></div>
+                                </div>
+                              )}
+
+                              {table.status === 'running_kot' && (
+                                <div className="absolute top-2 right-2">
+                                  <div className="w-3 h-3 bg-orange-500 rounded-full border-2 border-white shadow-sm"></div>
+                                </div>
+                              )}
+
+                              {/* Delete Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDelete(table.id)
+                                }}
+                                className="absolute bottom-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
                     )
                   })
                 )}
-           
+
               </div>
             </div>
           </main>
@@ -463,69 +463,79 @@ export default function TablesPage() {
 
         {/* Table Action Dialog */}
         <Dialog open={isActionModalOpen} onOpenChange={setIsActionModalOpen}>
-          <DialogContent className="sm:max-w-[400px] border-0 shadow-xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-gray-800">
-                {selectedTable?.name} - {selectedTable?.section}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {selectedTable?.status === 'blank' && (
-                <Button 
-                  onClick={() => handleAddItems(selectedTable)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Utensils className="h-4 w-4 mr-2" />
-                  Add Items
-                </Button>
-              )}
-              
-              {(selectedTable?.status === 'running' || selectedTable?.status === 'running_kot') && (
-                <>
-                  <Button 
+          <DialogContent className="sm:max-w-[500px] border border-gray-100 shadow-2xl rounded-2xl p-0 overflow-hidden">
+            <div className="p-6 pb-4 bg-white border-b border-gray-100">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                  {selectedTable?.name}
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md tracking-wide">
+                    {selectedTable?.section?.toUpperCase()}
+                  </span>
+                </DialogTitle>
+              </DialogHeader>
+            </div>
+            
+            <div className="p-6 bg-slate-50/50">
+              <div className="grid grid-cols-2 gap-4">
+                {selectedTable?.status === 'blank' && (
+                  <button 
                     onClick={() => handleAddItems(selectedTable)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="col-span-2 flex flex-col items-center justify-center h-32 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer hover:-translate-y-1"
                   >
-                    <Utensils className="h-4 w-4 mr-2" />
-                    Add More Items
-                  </Button>
-                  <Button 
-                    onClick={handlePrintBill}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    <Utensils className="h-8 w-8 mb-3" />
+                    <span className="font-semibold text-lg tracking-wide">Add Items</span>
+                  </button>
+                )}
+                
+                {(selectedTable?.status === 'running' || selectedTable?.status === 'running_kot') && (
+                  <>
+                    <button 
+                      onClick={() => handleAddItems(selectedTable)}
+                      className="flex flex-col items-center justify-center h-32 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer hover:-translate-y-1"
+                    >
+                      <Utensils className="h-8 w-8 mb-3" />
+                      <span className="font-semibold tracking-wide">Add More Items</span>
+                    </button>
+                    <button 
+                      onClick={handlePrintBill}
+                      className="flex flex-col items-center justify-center h-32 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all duration-200 shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer hover:-translate-y-1"
+                    >
+                      <Receipt className="h-8 w-8 mb-3" />
+                      <span className="font-semibold tracking-wide">Print Bill</span>
+                    </button>
+                  </>
+                )}
+                
+                {selectedTable?.status === 'paid' && (
+                  <button 
+                    onClick={handleResetTable}
+                    className="col-span-2 flex flex-col items-center justify-center h-32 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all duration-200 shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer hover:-translate-y-1"
                   >
-                    <Receipt className="h-4 w-4 mr-2" />
-                    Print Bill
-                  </Button>
-                </>
-              )}
+                    <Plus className="h-8 w-8 mb-3 text-slate-400" />
+                    <span className="font-semibold tracking-wide text-lg">Reset Table to Blank</span>
+                  </button>
+                )}
+                
+                {selectedTable?.status === 'printed' && (
+                  <button 
+                    onClick={handleSettleBill}
+                    className="col-span-2 flex flex-col items-center justify-center h-32 rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-all duration-200 shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer hover:-translate-y-1"
+                  >
+                    <CreditCard className="h-8 w-8 mb-3" />
+                    <span className="font-semibold tracking-wide text-lg">Settle Payment</span>
+                  </button>
+                )}
+              </div>
               
-              {selectedTable?.status === 'paid' && (
+              <div className="mt-6">
                 <Button 
-                  onClick={handleResetTable}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  variant="outline"
+                  onClick={() => setIsActionModalOpen(false)}
+                  className=" cursor-pointer w-full h-12 text-base font-medium rounded-xl border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Reset Table to Blank
+                  Cancel
                 </Button>
-              )}
-              
-              {selectedTable?.status === 'printed' && (
-                <Button 
-                  onClick={handleSettleBill}
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                >
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Settle Payment
-                </Button>
-              )}
-              
-              <Button 
-                variant="outline"
-                onClick={() => setIsActionModalOpen(false)}
-                className="w-full"
-              >
-                Cancel
-              </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -547,7 +557,7 @@ export default function TablesPage() {
                   <p>• Section: <span className="font-semibold">{selectedTable?.section}</span></p>
                 </div>
               </div>
-              
+
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p className="text-sm text-gray-600">
                   This action will reset the table status to <span className="font-semibold">"Blank"</span> and make it available for new customers.
@@ -555,14 +565,14 @@ export default function TablesPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setIsResetConfirmOpen(false)}
                   className="flex-1"
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={confirmResetTable}
                   className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
                 >

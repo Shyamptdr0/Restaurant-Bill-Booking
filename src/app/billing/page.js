@@ -27,8 +27,13 @@ function BillingPageContent() {
 
   useEffect(() => {
     fetchMenuItems()
+    setCartItems([]) // Reset cart state when tableId changes
+    setExistingBill(null)
     if (tableId) {
       fetchExistingBill()
+    } else {
+      setCartItems([])
+      setExistingBill(null)
     }
   }, [tableId])
 
@@ -79,21 +84,57 @@ function BillingPageContent() {
                 quantity: item.quantity
               }))
               setCartItems(groupItems(items))
+            } else {
+              setCartItems([])
             }
+          } else {
+            setCartItems([])
           }
+        } else {
+          setExistingBill(null)
+          setCartItems([])
         }
+      } else {
+        setExistingBill(null)
+        setCartItems([])
       }
     } catch (error) {
       console.error('Error fetching existing bill:', error)
+      setExistingBill(null)
+      setCartItems([])
     }
   }
 
   const fetchMenuItems = async () => {
     try {
+      // 1. Try to load from cache first for instant loading
+      if (typeof window !== 'undefined') {
+        const cachedMenu = localStorage.getItem('cached_menu_items')
+        if (cachedMenu) {
+          try {
+            const parsedMenu = JSON.parse(cachedMenu)
+            if (Array.isArray(parsedMenu) && parsedMenu.length > 0) {
+              setMenuItems(parsedMenu)
+              // Hide loading spinner immediately for instant UI render
+              setLoading(false)
+            }
+          } catch (e) {
+            console.error('Error parsing cached menu:', e)
+          }
+        }
+      }
+
+      // 2. Fetch fresh data from API
       const response = await fetch('/api/menu-items')
       if (response.ok) {
         const data = await response.json()
-        setMenuItems(data.data || [])
+        const items = data.data || []
+        setMenuItems(items)
+        
+        // Save to cache for next time
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cached_menu_items', JSON.stringify(items))
+        }
       }
     } catch (error) {
       console.error('Error fetching menu items:', error)

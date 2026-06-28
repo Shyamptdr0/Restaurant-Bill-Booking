@@ -156,21 +156,21 @@ export default function PrintFromTemporary() {
       }
       setBill(finalBillData)
 
-      // Update table status to paid
-      await fetch(`/api/tables/${tableId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: tableName,
-          section: section,
-          status: 'paid'
+      // Update table status to paid and Clear temporary items in parallel
+      await Promise.all([
+        fetch(`/api/tables/${tableId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: tableName,
+            section: section,
+            status: 'paid'
+          })
+        }),
+        fetch(`/api/temporary-items?table_id=${tableId}`, {
+          method: 'DELETE'
         })
-      })
-
-      // Clear temporary items
-      await fetch(`/api/temporary-items?table_id=${tableId}`, {
-        method: 'DELETE'
-      })
+      ])
 
       return billResult.data
     } catch (error) {
@@ -184,8 +184,8 @@ export default function PrintFromTemporary() {
     try {
       setIsPrinting(true)
       
-      // Preparation delay for UI rendering
-      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000))
+      // Brief delay to allow print overlay/spinner UI to render
+      await new Promise(resolve => setTimeout(resolve, 100))
       
       let finalBill = bill
       if (!finalBill) {
@@ -195,29 +195,26 @@ export default function PrintFromTemporary() {
           return
         }
       }
-
-      // Wait for minimum time to ensure user sees the spinner
-      await minLoadingTime
       
       // Hide spinner so it doesn't appear in print dialog
       setIsPrinting(false)
       
       // Small buffer for React to unmount overlay
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise(resolve => setTimeout(resolve, 50))
       
       window.print()
       
       // Redirect to tables page after printing
       setTimeout(() => {
         router.push('/tables')
-      }, 1000)
+      }, 500)
     } catch (error) {
       console.error('Error in handlePrint:', error)
       setIsPrinting(false)
       window.print()
       setTimeout(() => {
         router.push('/tables')
-      }, 1000)
+      }, 500)
     }
   }
 

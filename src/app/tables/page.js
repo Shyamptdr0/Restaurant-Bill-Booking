@@ -151,6 +151,11 @@ export default function TablesPage() {
           })
         })
 
+        // Also clear any temporary items associated with this table
+        await fetch(`/api/temporary-items?table_id=${selectedTable.id}`, {
+          method: 'DELETE'
+        })
+
         fetchTables()
         setIsActionModalOpen(false)
         setIsResetConfirmOpen(false)
@@ -162,33 +167,36 @@ export default function TablesPage() {
 
   const handleSettleBill = async () => {
     if (selectedTable) {
-      // Find the paid bill for this table
+      // Find the printed bill for this table
       try {
-        const response = await fetch(`/api/bills?table_id=${selectedTable.id}&status=paid`)
+        const response = await fetch(`/api/bills?table_id=${selectedTable.id}&status=printed`)
         if (response.ok) {
           const bills = await response.json()
           if (bills.data && bills.data.length > 0) {
-            const bill = bills.data[0]
-            // Update bill status to settled
+            // Sort by most recent to get the correct bill
+            const sortedBills = bills.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            const bill = sortedBills[0]
+            
+            // Update bill status to paid
             await fetch(`/api/bills/${bill.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'settled' })
+              body: JSON.stringify({ status: 'paid' })
             })
 
-            // Clear temporary items from database
+            // Clear temporary items from database (just in case)
             await fetch(`/api/temporary-items?table_id=${selectedTable.id}`, {
               method: 'DELETE'
             })
 
-            // Update table status to blank (available for new customers)
+            // Update table status to paid
             await fetch(`/api/tables/${selectedTable.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 name: selectedTable.name,
                 section: selectedTable.section,
-                status: 'blank'
+                status: 'paid'
               })
             })
 

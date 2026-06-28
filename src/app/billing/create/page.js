@@ -268,6 +268,19 @@ function CreateBillContent() {
         if (!response.ok) {
           console.error('Failed to sync items to database')
         }
+
+        // If the cart is empty, update the table status to blank so it doesn't stay running
+        if (cartItems.length === 0) {
+          await fetch(`/api/tables/${tableId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: tableName,
+              section: section,
+              status: 'blank'
+            })
+          })
+        }
       } catch (error) {
         console.error('Error syncing items:', error)
       } finally {

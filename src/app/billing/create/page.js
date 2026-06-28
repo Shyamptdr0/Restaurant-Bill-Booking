@@ -47,10 +47,20 @@ function CreateBillContent() {
   useEffect(() => {
     fetchMenuItems()
     setCart([]) // Reset cart state when tableId changes to prevent leaking items from previous table/bill
+    
+    let intervalId;
     if (tableId) {
       fetchTemporaryItems()
+      // Auto-refresh temporary items every 3 seconds for multi-device sync
+      intervalId = setInterval(() => {
+        fetchTemporaryItems()
+      }, 3000)
     } else {
       setCart([])
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId)
     }
   }, [tableId])
 
@@ -93,16 +103,24 @@ function CreateBillContent() {
           })
           
           // Convert grouped items back to array
-          setCart(Object.values(groupedItems))
+          if (!syncTimeoutRef.current) {
+            setCart(Object.values(groupedItems))
+          }
         } else {
-          setCart([]) // Clear cart if no temporary items found in DB
+          if (!syncTimeoutRef.current) {
+            setCart([]) // Clear cart if no temporary items found in DB
+          }
         }
       } else {
-        setCart([]) // Clear cart on API error response
+        if (!syncTimeoutRef.current) {
+          setCart([]) // Clear cart on API error response
+        }
       }
     } catch (error) {
       console.error('Error fetching temporary items:', error)
-      setCart([]) // Clear cart on exception
+      if (!syncTimeoutRef.current) {
+        setCart([]) // Clear cart on exception
+      }
     }
   }
 
@@ -252,6 +270,9 @@ function CreateBillContent() {
         }
       } catch (error) {
         console.error('Error syncing items:', error)
+      } finally {
+        // Clear the ref so background polling can resume
+        syncTimeoutRef.current = null
       }
     }, 300) // 300ms debounce
   }

@@ -57,8 +57,8 @@ export default function BillHistory() {
 
   const fetchBills = useCallback(async () => {
     try {
-      // Fetch all bills to debug status values
-      const response = await fetch('/api/bills')
+      // Fetch all bills to populate history properly
+      const response = await fetch('/api/bills?fetch_all=true')
       const result = await response.json()
       const allBills = result.data || []
       
@@ -280,6 +280,11 @@ export default function BillHistory() {
         if (response.ok) {
           // Refresh the bills list
           fetchBills()
+          import('sonner').then(({ toast }) => {
+            toast.success(`Bill #${billToDelete.no} deleted`, {
+              position: 'top-center'
+            })
+          })
         } else {
           alert('Failed to delete bill. Please try again.')
         }

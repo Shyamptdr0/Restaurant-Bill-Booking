@@ -156,21 +156,21 @@ export default function PrintFromTemporary() {
       }
       setBill(finalBillData)
 
-      // Update table status to paid and Clear temporary items in parallel
-      await Promise.all([
+      // Update table status to printed and Clear temporary items in background (don't await)
+      Promise.all([
         fetch(`/api/tables/${tableId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: tableName,
             section: section,
-            status: 'paid'
+            status: 'printed'
           })
         }),
         fetch(`/api/temporary-items?table_id=${tableId}`, {
           method: 'DELETE'
         })
-      ])
+      ]).catch(err => console.error('Background updates failed:', err))
 
       return billResult.data
     } catch (error) {

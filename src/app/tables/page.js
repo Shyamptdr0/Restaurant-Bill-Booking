@@ -32,6 +32,13 @@ export default function TablesPage() {
 
   useEffect(() => {
     fetchTables()
+    
+    // Auto-refresh tables every 3 seconds for multi-device sync
+    const intervalId = setInterval(() => {
+      fetchTables()
+    }, 3000)
+    
+    return () => clearInterval(intervalId)
   }, [])
 
   const fetchTables = async () => {
@@ -118,24 +125,12 @@ export default function TablesPage() {
     if (!selectedTable) return
 
     try {
-      // Check if there are temporary items for this table
-      const response = await fetch(`/api/temporary-items?table_id=${selectedTable.id}`)
-
-      if (response.ok) {
-        const data = await response.json()
-
-        if (data.data && data.data.length > 0) {
-          // Navigate to print-from-temporary page
-          router.push(`/billing/print-temporary/${selectedTable.id}?tableName=${encodeURIComponent(selectedTable.name)}&section=${encodeURIComponent(selectedTable.section)}`)
-        } else {
-          alert('No items found for this table')
-        }
-      } else {
-        alert('Error checking table items')
-      }
+      // Instantly navigate to the print page. The print page will fetch its own data
+      // and handle empty states gracefully. This removes a redundant API call that was slowing down the UI.
+      router.push(`/billing/print-temporary/${selectedTable.id}?tableName=${encodeURIComponent(selectedTable.name)}&section=${encodeURIComponent(selectedTable.section)}`)
+      setIsActionModalOpen(false)
     } catch (error) {
-      console.error('Error printing bill:', error)
-      alert('Error printing bill: ' + error.message)
+      console.error('Error navigating to print page:', error)
     }
   }
 

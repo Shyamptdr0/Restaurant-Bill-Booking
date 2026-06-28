@@ -173,6 +173,16 @@ export default function Dashboard() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const isFirstRender = useRef(true)
 
+  const [periodStats, setPeriodStats] = useState({
+    title1: 'Total Volume', value1: 0, label1: '-',
+    title2: 'Highest', value2: 0, label2: '-',
+    title3: 'Lowest', value3: 0, label3: '-',
+    title4: 'Average', value4: 0, label4: '-'
+  })
+  const [timeframe, setTimeframe] = useState('1M')
+  const [chartContextDate, setChartContextDate] = useState(new Date())
+  const [chartData, setChartData] = useState([])
+
   const [stats, setStats] = useState({
     todaySales: 0,
     todayBills: 0,
@@ -251,41 +261,138 @@ export default function Dashboard() {
       generateAlerts()
       calculateCustomerInsights()
       calculatePerformanceMetrics()
+      generateChartData(allBills, timeframe, chartContextDate)
     }
-  }, [allBills])
+  }, [allBills, timeframe, chartContextDate])
+
+  const handleBarClick = (data) => {
+    if (!data || !data.rawDateKey) return;
+    
+    if (timeframe === '1Y') {
+      const [y, m] = data.rawDateKey.split('-')
+      setChartContextDate(new Date(parseInt(y), parseInt(m) - 1, 1))
+      setTimeframe('1M')
+    } else if (timeframe === '1M' || timeframe === '1W') {
+      setChartContextDate(new Date(data.rawDateKey))
+      setTimeframe('1D')
+    }
+  }
+
+  const generateChartData = (bills, tf, contextDate = new Date()) => {
+    const buckets = {}
+    
+    // PREFILL BUCKETS FOR TIME SPAN
+    if (tf === '1M') {
+      const year = contextDate.getFullYear()
+      const month = contextDate.getMonth()
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        buckets[dateStr] = { sales: 0, rawDateKey: dateStr }
+      }
+    } else if (tf === '1W') {
+      for (let d = 6; d >= 0; d--) {
+        const dDate = new Date(contextDate)
+        dDate.setDate(dDate.getDate() - d)
+        const dateStr = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, '0')}-${String(dDate.getDate()).padStart(2, '0')}`
+        buckets[dateStr] = { sales: 0, rawDateKey: dateStr }
+      }
+    } else if (tf === '1Y') {
+      const year = contextDate.getFullYear()
+      for (let m = 1; m <= 12; m++) {
+        const dateStr = `${year}-${String(m).padStart(2, '0')}`
+        buckets[dateStr] = { sales: 0, rawDateKey: dateStr }
+      }
+    } else if (tf === '1D') {
+      const dateStr = `${contextDate.getFullYear()}-${String(contextDate.getMonth() + 1).padStart(2, '0')}-${String(contextDate.getDate()).padStart(2, '0')}`
+      for (let h = 0; h < 24; h++) {
+        const hourStr = `${String(h).padStart(2, '0')}:00`
+        buckets[hourStr] = { sales: 0, rawDateKey: `${dateStr}T${hourStr}` }
+      }
+    }
+    
+    bills.forEach(bill => {
+      if (!bill.created_at) return
+      const date = new Date(bill.created_at)
+      if (isNaN(date.getTime())) return
+      const subtotal = Number(bill.subtotal) || 0
+      
+      let key = ''
+      if (tf === '1D') {
+        if (date.toDateString() === contextDate.toDateString()) {
+          key = `${String(date.getHours()).padStart(2, '0')}:00`
+        }
+      } else if (tf === '1Y') {
+        if (date.getFullYear() === contextDate.getFullYear()) {
+          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        }
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      }
+      
+      if (key && buckets[key] !== undefined) {
+        buckets[key].sales += subtotal
+      }
+    })
+
+    const sortedKeys = Object.keys(buckets).sort()
+    const data = []
+    
+    let maxBucket = { name: '-', sales: 0 }
+    let minBucket = { name: '-', sales: Infinity }
+    let totalSales = 0
+
+    for (let i = 0; i < sortedKeys.length; i++) {
+      const current = buckets[sortedKeys[i]].sales
+      const previous = i > 0 ? buckets[sortedKeys[i-1]].sales : 0
+      const rawDateKey = buckets[sortedKeys[i]].rawDateKey
+      
+      let formattedName = sortedKeys[i]
+      if (tf === '1Y') {
+        const [y, m] = formattedName.split('-')
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        formattedName = `${monthNames[parseInt(m)-1]} '${y.slice(2)}`
+      } else if (tf === '1D') {
+        const hour = parseInt(formattedName.split(':')[0])
+        const ampm = hour >= 12 ? 'PM' : 'AM'
+        const hour12 = hour % 12 || 12
+        formattedName = `${hour12} ${ampm}`
+      }
+
+      totalSales += current
+      if (current > maxBucket.sales) maxBucket = { name: formattedName, sales: current }
+      if (current < minBucket.sales) minBucket = { name: formattedName, sales: current }
+
+      data.push({
+        name: formattedName,
+        sales: current,
+        trend: current >= previous ? 'up' : 'down',
+        rawDateKey
+      })
+    }
+
+    if (minBucket.sales === Infinity) minBucket.sales = 0
+    const avgSales = data.length > 0 ? totalSales / data.length : 0
+
+    let periodLabel = 'Day'
+    if (tf === '1D') periodLabel = 'Hour'
+    if (tf === '1Y') periodLabel = 'Month'
+
+    setPeriodStats({
+      title1: 'Total Volume', value1: totalSales, label1: `${data.length} ${periodLabel}s`,
+      title2: `Highest ${periodLabel}`, value2: maxBucket.sales, label2: maxBucket.name,
+      title3: `Lowest ${periodLabel}`, value3: minBucket.sales, label3: minBucket.name,
+      title4: `Average / ${periodLabel}`, value4: avgSales, label4: '-'
+    })
+
+    setChartData(data)
+  }
 
   const fetchDashboardData = async (showSpinner = false) => {
-    // 1. Immediate local calculation to make it "fast"
-    if (allBills.length > 0) {
-      const localYear = currentMonth.getFullYear()
-      const localMonthNum = currentMonth.getMonth()
-      const localStart = new Date(localYear, localMonthNum, 1)
-      const localEnd = new Date(localYear, localMonthNum + 1, 0, 23, 59, 59, 999)
-
-      const currentMonthBills = allBills.filter(bill => {
-        if (!bill.created_at) return false
-        const billDate = new Date(bill.created_at)
-        return billDate >= localStart && billDate <= localEnd
-      })
-      
-      const localRevenue = currentMonthBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-      const localBills = currentMonthBills.length
-      const localAvgOrder = localBills > 0 ? localRevenue / localBills : 0
-      
-      setMonthly(prev => ({
-        ...prev,
-        revenue: localRevenue,
-        bills: localBills,
-        avgOrder: localAvgOrder,
-        // Keep previous growth since we don't calculate it locally easily
-      }))
-    }
-
     try {
       if (showSpinner) setLoading(true)
       setRefreshing(true)
 
-      console.log('Dashboard: Fetching dashboard data...')
       const localYear = currentMonth.getFullYear()
       const localMonthNum = currentMonth.getMonth()
       const localStart = new Date(localYear, localMonthNum, 1)
@@ -293,42 +400,11 @@ export default function Dashboard() {
       const monthStr = `${localYear}-${String(localMonthNum + 1).padStart(2, '0')}`
       const startDateIso = localStart.toISOString()
       const endDateIso = localEnd.toISOString()
-      console.log('Dashboard: Fetching for month:', monthStr)
 
-      // Fetch bills using direct API call
-      const response = await fetch('/api/bills?fetch_all=true')
-      console.log('Dashboard: Response status:', response.status)
-      const result = await response.json()
-      console.log('Dashboard: API Response:', result)
-      const allBills = result.data || []
-      console.log('Dashboard: All bills:', allBills)
-      setAllBills(allBills)
-
-      // Filter bills for current month
-      const currentMonthBills = allBills.filter(bill => {
-        if (!bill.created_at) return false
-        const billDate = new Date(bill.created_at)
-        return billDate >= localStart && billDate <= localEnd
-      })
-
-      // Calculate today's stats from local bills
-      const today = new Date().toDateString()
-      console.log('Dashboard: Today date:', today)
-      const todayBills = currentMonthBills.filter(bill =>
-        new Date(bill.created_at).toDateString() === today
-      )
-      console.log('Dashboard: Today bills:', todayBills)
-
-      const todaySales = todayBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-      const totalItems = currentMonthBills.reduce((sum, bill) => sum + (bill.items?.length || 0), 0)
-      console.log('Dashboard: Today sales:', todaySales, 'Total items:', totalItems)
-
-      // Try to fetch server data if online
       let serverData = { dashboard: null, monthly: null, topSelling: null, calendar: null }
       let menuItemsData = null
 
       if (navigator.onLine) {
-        console.log('Dashboard: Online, fetching server data...')
         try {
           const [dashboardResponse, monthlyResponse, topSellingResponse, calendarStatusResponse, menuItemsResponse] = await Promise.all([
             fetch('/api/dashboard'),
@@ -343,68 +419,60 @@ export default function Dashboard() {
           serverData.topSelling = await topSellingResponse.json()
           serverData.calendar = await calendarStatusResponse.json()
           menuItemsData = await menuItemsResponse.json()
-          console.log('Dashboard: Server data fetched:', serverData)
         } catch (error) {
-          console.warn('Failed to fetch server data, using offline data:', error)
+          console.warn('Failed to fetch server data:', error)
         }
-      } else {
-        console.log('Dashboard: Offline, skipping server data fetch')
       }
 
-      // Update stats with local data (primary) and server data (fallback)
-      const newStats = {
-        todaySales: todaySales,
-        todayBills: todayBills.length,
-        totalItems: totalItems,
-        weeklySales: serverData.dashboard?.weeklySales?.length > 0
-          ? serverData.dashboard.weeklySales.map(item => ({
-            ...item,
-            sales: Number(item.sales) || 0
-          }))
-          : generateWeeklySalesFallback(allBills),
-        monthlyRevenue: serverData.dashboard?.monthlyRevenue || todaySales,
-        averageOrderValue: serverData.dashboard?.averageOrderValue || 0,
-        totalMenuItems: menuItemsData?.data ?
-          (Array.isArray(menuItemsData.data) ? menuItemsData.data.length :
-            typeof menuItemsData.data === 'object' && menuItemsData.data.data ?
-              menuItemsData.data.data.length : 0) : 0,
-        activeMenuItems: menuItemsData?.data ?
-          (Array.isArray(menuItemsData.data) ? menuItemsData.data.filter(item => item.status === 'active').length :
-            typeof menuItemsData.data === 'object' && menuItemsData.data.data ?
-              menuItemsData.data.data.filter(item => item.status === 'active').length : 0) : 0
+      // Extract menu data safely
+      const rawMenuData = menuItemsData?.data
+      let menuItemsArray = []
+      if (Array.isArray(rawMenuData)) {
+        menuItemsArray = rawMenuData
+      } else if (rawMenuData && Array.isArray(rawMenuData.data)) {
+        menuItemsArray = rawMenuData.data
       }
-      console.log('Dashboard: Setting stats:', newStats)
+
+      const dashData = serverData.dashboard?.data || {}
+
+      const newStats = {
+        todaySales: dashData.todaySales || 0,
+        todayBills: dashData.todayBills || 0,
+        totalItems: 0,
+        weeklySales: dashData.weeklySales?.length > 0 
+          ? dashData.weeklySales.map(item => ({ ...item, sales: Number(item.sales) || 0 })) 
+          : [],
+        monthlyRevenue: dashData.monthlyRevenue || 0,
+        averageOrderValue: dashData.averageOrderValue || 0,
+        totalMenuItems: menuItemsArray.length,
+        activeMenuItems: menuItemsArray.filter(i => i.status === 'active').length
+      }
       setStats(newStats)
 
-      // Set recent bills and menu items for management
-      setRecentBills(serverData.dashboard?.recentBills || [])
-      setMenuItems(menuItemsData?.data || [])
+      setRecentBills(dashData.recentBills || [])
+      setMenuItems(menuItemsArray)
 
-      // Calculate fallbacks from local bills for the selected month
-      const calculatedMonthlyRevenue = currentMonthBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-      const calculatedMonthlyBills = currentMonthBills.length
-      const calculatedAvgOrder = calculatedMonthlyBills > 0 ? calculatedMonthlyRevenue / calculatedMonthlyBills : 0
-
-      // Update monthly stats from server data with local calculation as fallback
-      const newMonthly = {
-        revenue: serverData.monthly?.data?.revenue !== undefined ? serverData.monthly.data.revenue : calculatedMonthlyRevenue,
-        bills: serverData.monthly?.data?.bills !== undefined ? serverData.monthly.data.bills : calculatedMonthlyBills,
+      setMonthly({
+        revenue: serverData.monthly?.data?.revenue || 0,
+        bills: serverData.monthly?.data?.bills || 0,
         customers: serverData.monthly?.data?.customers || 0,
-        avgOrder: serverData.monthly?.data?.avgOrderValue || calculatedAvgOrder,
+        avgOrder: serverData.monthly?.data?.avgOrderValue || 0,
         growth: serverData.monthly?.data?.growth || 0
-      }
-      console.log('Dashboard: Setting monthly stats:', newMonthly)
-      setMonthly(newMonthly)
+      })
 
-      const newTopSelling = serverData.topSelling?.data || topSellingItems
-      console.log('Dashboard: Setting top selling:', newTopSelling)
-      setTopSelling(newTopSelling)
-
-      const newDailyData = serverData.monthly?.dailyData || null
-      console.log('Dashboard: Setting daily data:', newDailyData)
-      setDailyData(newDailyData)
+      setTopSelling(serverData.topSelling?.data || [])
       setCalendarStatus(serverData.calendar?.data || [])
-
+      setDailyData(serverData.monthly?.dailyData || null)
+      
+      // Async fetch all bills for background insights calculation without blocking UI
+      fetch('/api/bills?fetch_all=true')
+        .then(res => res.json())
+        .then(result => {
+           if (result.data) {
+             setAllBills(result.data)
+           }
+        })
+        .catch(err => console.error("Failed to fetch all bills for insights", err))
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -746,17 +814,38 @@ export default function Dashboard() {
     new Date(bill.created_at).toDateString() === today
   ) || []
 
-  if (loading) {
-    return (
-      <AuthGuard>
-        <div className="flex h-screen items-center justify-center">
-          <div className="flex flex-col items-center space-y-4">
-            <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-            <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-orange-600" />
-          </div>
-        </div>
-      </AuthGuard>
-    )
+  // Loading block removed for instant rendering
+
+  const getContextLabel = () => {
+    if (timeframe === '1Y') return `Year: ${chartContextDate.getFullYear()}`
+    if (timeframe === '1M') return `Month: ${chartContextDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+    if (timeframe === '1W') return `Week ending: ${chartContextDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    if (timeframe === '1D') return `Date: ${chartContextDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    return ''
+  }
+
+  const navigateChartContext = (direction) => {
+    const newDate = new Date(chartContextDate)
+    if (timeframe === '1D') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1))
+    } else if (timeframe === '1W') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
+    } else if (timeframe === '1M') {
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1))
+    } else if (timeframe === '1Y') {
+      newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1))
+    }
+    if (newDate > new Date() && direction === 'next') return
+    setChartContextDate(newDate)
+  }
+
+  const isNextDisabled = () => {
+    const now = new Date()
+    if (timeframe === '1D') return chartContextDate.toDateString() === now.toDateString()
+    if (timeframe === '1W') return chartContextDate >= now
+    if (timeframe === '1M') return chartContextDate.getMonth() === now.getMonth() && chartContextDate.getFullYear() === now.getFullYear()
+    if (timeframe === '1Y') return chartContextDate.getFullYear() === now.getFullYear()
+    return false
   }
 
   return (
@@ -796,6 +885,119 @@ export default function Dashboard() {
                   Calendar
                 </Button>
               </div>
+            </div>
+
+            {/* TRADER DASHBOARD ANALYTICS */}
+            <div className="space-y-6 lg:space-y-8">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="bg-gray-900 text-white border-gray-800 shadow-lg">
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-400 font-medium">{periodStats.title1}</p>
+                  <p className="text-2xl font-bold mt-1 text-emerald-400">{formatCurrency(periodStats.value1)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{periodStats.label1}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-900 text-white border-gray-800 shadow-lg">
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-400 font-medium">{periodStats.title2}</p>
+                  <p className="text-2xl font-bold mt-1 text-emerald-400">{formatCurrency(periodStats.value2)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{periodStats.label2}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-900 text-white border-gray-800 shadow-lg">
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-400 font-medium">{periodStats.title3}</p>
+                  <p className="text-2xl font-bold mt-1 text-emerald-400">{formatCurrency(periodStats.value3)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{periodStats.label3}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-900 text-white border-gray-800 shadow-lg">
+                <CardContent className="p-4">
+                  <p className="text-sm text-gray-400 font-medium">{periodStats.title4}</p>
+                  <p className="text-2xl font-bold mt-1 text-emerald-400">{formatCurrency(periodStats.value4)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{periodStats.label4}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* TRADING CHART */}
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardHeader className="border-b pb-4 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-indigo-600" />
+                    Market Trend Analysis
+                    <span className="flex items-center gap-1 text-xs font-normal text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full ml-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      LIVE
+                    </span>
+                  </CardTitle>
+                  <div className="flex items-center gap-4 mt-2">
+                    <p className="text-sm text-gray-500">Viewing Data for: <strong className="text-gray-700">{getContextLabel()}</strong></p>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" onClick={() => navigateChartContext('prev')} className="h-7 w-7 p-0">
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => navigateChartContext('next')} disabled={isNextDisabled()} className="h-7 w-7 p-0">
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex bg-gray-100 p-1 rounded-md">
+                  {['1D', '1W', '1M', '1Y'].map(tf => (
+                    <button
+                      key={tf}
+                      onClick={() => {
+                        setTimeframe(tf)
+                        setChartContextDate(new Date())
+                      }}
+                      className={`px-3 py-1 text-xs font-semibold rounded-sm transition-all ${timeframe === tf ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="h-[400px] w-full p-4">
+                  {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="name" tick={{fill: '#6b7280', fontSize: 12}} tickLine={false} axisLine={false} />
+                        <YAxis tickFormatter={(val) => `₹${val/1000}k`} tick={{fill: '#6b7280', fontSize: 12}} tickLine={false} axisLine={false} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#111827', borderColor: '#1f2937', color: '#fff', borderRadius: '8px' }}
+                          itemStyle={{ color: '#fff' }}
+                          formatter={(value) => [formatCurrency(value), 'Revenue']}
+                        />
+                        <Bar 
+                          dataKey="sales" 
+                          fill="#10b981" 
+                          radius={[4, 4, 0, 0]} 
+                          maxBarSize={40}
+                          isAnimationActive={true}
+                          animationDuration={1500}
+                          animationEasing="ease-out"
+                          onClick={handleBarClick}
+                          cursor="pointer"
+                        >
+                          {chartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.trend === 'up' ? '#10b981' : '#ef4444'} />
+                          ))}
+                        </Bar>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-gray-400 flex-col">
+                      <BarChart3 className="w-12 h-12 mb-2 opacity-20" />
+                      <p>No trading data available for {timeframe}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             </div>
 
             {/* FULL MONTH CALENDAR - CONDITIONAL */}
@@ -1019,39 +1221,6 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* WEEKLY SALES */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Weekly Sales</CardTitle>
-                <CardDescription>Last 7 days revenue</CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                {stats.weeklySales && stats.weeklySales.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stats.weeklySales}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="day" />
-                      <YAxis
-                        tickFormatter={(value) => {
-                          const num = Number(value || 0)
-                          return isNaN(num) ? '0' : num.toString()
-                        }}
-                      />
-                      <Tooltip
-                        formatter={(value) => formatCurrency(Number(value || 0))}
-                        labelFormatter={(label) => `${label}`}
-                      />
-                      <Bar dataKey="sales" fill="#f97316" isAnimationActive={false} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-gray-500">
-                    <p>No weekly sales data available</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
 
             {/* QUICK ACTIONS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">

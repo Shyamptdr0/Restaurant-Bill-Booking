@@ -35,6 +35,8 @@ function CreateBillContent() {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const router = useRouter()
   const syncTimeoutRef = useRef(null)
+  const lastLocalUpdateRef = useRef(0)
+  const isSyncingRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -77,10 +79,20 @@ function CreateBillContent() {
   // })
 
   const fetchTemporaryItems = async () => {
+    // Skip fetch entirely if we are in the middle of a sync or a local update debounce
+    if (isSyncingRef.current || syncTimeoutRef.current) return
+
+    const fetchStartTime = Date.now()
     try {
-      const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${Date.now()}`)
+      const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${fetchStartTime}`)
       if (response.ok) {
         const data = await response.json()
+        
+        // Final check: if a local update happened while fetching, or a sync started, discard results
+        if (lastLocalUpdateRef.current > fetchStartTime || isSyncingRef.current || syncTimeoutRef.current) {
+          return
+        }
+
         if (data.data && data.data.length > 0) {
           // Group items by item_id to handle potential duplicates
           const groupedItems = {}
@@ -102,25 +114,16 @@ function CreateBillContent() {
             }
           })
           
-          // Convert grouped items back to array
-          if (!syncTimeoutRef.current) {
-            setCart(Object.values(groupedItems))
-          }
+          setCart(Object.values(groupedItems))
         } else {
-          if (!syncTimeoutRef.current) {
-            setCart([]) // Clear cart if no temporary items found in DB
-          }
+          setCart([]) // Clear cart if no temporary items found in DB
         }
       } else {
-        if (!syncTimeoutRef.current) {
-          setCart([]) // Clear cart on API error response
-        }
+        setCart([]) // Clear cart on API error response
       }
     } catch (error) {
       console.error('Error fetching temporary items:', error)
-      if (!syncTimeoutRef.current) {
-        setCart([]) // Clear cart on exception
-      }
+      setCart([]) // Clear cart on exception
     }
   }
 
@@ -191,6 +194,7 @@ function CreateBillContent() {
   }
 
   const addToCart = (item) => {
+    lastLocalUpdateRef.current = Date.now()
     setCart(currentCart => {
       const existingItem = currentCart.find(cartItem => String(cartItem.id) === String(item.id))
       let newCart
@@ -218,6 +222,7 @@ function CreateBillContent() {
   }
 
   const updateQuantity = (itemId, newQuantity) => {
+    lastLocalUpdateRef.current = Date.now()
     if (newQuantity <= 0) {
       removeFromCart(itemId)
     } else {
@@ -232,6 +237,7 @@ function CreateBillContent() {
   }
 
   const removeFromCart = (itemId) => {
+    lastLocalUpdateRef.current = Date.now()
     setCart(currentCart => {
       const newCart = currentCart.filter(item => String(item.id) !== String(itemId))
       syncToDatabase(newCart)
@@ -245,6 +251,8 @@ function CreateBillContent() {
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current)
     }
+    
+    isSyncingRef.current = true
     
     syncTimeoutRef.current = setTimeout(async () => {
       try {
@@ -286,6 +294,12 @@ function CreateBillContent() {
       } finally {
         // Clear the ref so background polling can resume
         syncTimeoutRef.current = null
+        // Keep syncing flag true for a short duration to prevent race conditions with incoming GET requests
+        setTimeout(() => {
+          if (!syncTimeoutRef.current) {
+            isSyncingRef.current = false
+          }
+        }, 1000)
       }
     }, 300) // 300ms debounce
   }

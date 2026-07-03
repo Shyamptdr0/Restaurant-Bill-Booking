@@ -104,7 +104,7 @@ function CreateBillContent() {
             } else {
               // Create new item entry with unique identifier
               groupedItems[itemId] = {
-                cartId: `${itemId}_${Date.now()}_${Math.random()}`, // Unique identifier for cart
+                cartId: itemId, // Stable cartId
                 id: item.item_id,
                 name: item.item_name,
                 category: item.item_category,
@@ -207,11 +207,11 @@ function CreateBillContent() {
             : cartItem
         )
       } else {
-        // Add new item with unique cartId
+        // Add new item with stable cartId
         newCart = [...currentCart, { 
           ...item, 
           quantity: 1,
-          cartId: `${item.id}_${Date.now()}_${Math.random()}` // Unique identifier for cart
+          cartId: item.id // Stable cartId
         }]
       }
       

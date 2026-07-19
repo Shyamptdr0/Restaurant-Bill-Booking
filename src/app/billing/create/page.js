@@ -99,8 +99,8 @@ function CreateBillContent() {
           data.data.forEach(item => {
             const itemId = item.item_id
             if (groupedItems[itemId]) {
-              // If item already exists, add quantity
-              groupedItems[itemId].quantity += item.quantity
+              // If item already exists (transient duplicate), take the highest quantity to prevent artificial inflation
+              groupedItems[itemId].quantity = Math.max(groupedItems[itemId].quantity, item.quantity)
             } else {
               // Create new item entry with unique identifier
               groupedItems[itemId] = {

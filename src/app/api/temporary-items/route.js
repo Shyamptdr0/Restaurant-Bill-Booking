@@ -62,6 +62,7 @@ export async function GET(request) {
         .select('*')
         .eq('table_id', tableId) // tableId is string UUID, works fine
         .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
     })
 
     if (error) throw error
@@ -284,6 +285,7 @@ export async function PUT(request) {
         .select('*')
         .eq('table_id', table_id)
         .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
       return await query
     })
 

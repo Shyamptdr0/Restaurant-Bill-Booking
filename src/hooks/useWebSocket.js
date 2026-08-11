@@ -58,6 +58,7 @@ export function useRealtimeItemsSync(tableId, onItemsUpdate) {
       setIsPolling(true)
       
       intervalRef.current = setInterval(async () => {
+        if (typeof document !== 'undefined' && document.hidden) return
         try {
           const response = await fetch(`/api/temporary-items?table_id=${tableId}`)
           if (response.ok) {

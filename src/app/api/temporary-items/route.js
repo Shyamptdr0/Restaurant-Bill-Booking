@@ -1,52 +1,31 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  {
-    db: {
-      schema: 'public'
-    },
-    auth: {
-      persistSession: false
-    },
-    global: {
-      headers: {
-        'Connection': 'keep-alive'
-      }
-    }
-  }
-)
-
-// Helper function for retry logic
-async function withRetry(operation, maxRetries = 3) {
+// Helper function for retry logic with fast fail
+async function withRetry(operation, maxRetries = 2) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await operation()
     } catch (error) {
-      // Check if it's a connection timeout error
-      if (error.message?.includes('Connect Timeout Error') || 
-          error.message?.includes('UND_ERR_CONNECT_TIMEOUT') ||
-          error.message?.includes('fetch failed')) {
-        
+      if (
+        error.message?.includes('Connect Timeout Error') || 
+        error.message?.includes('UND_ERR_CONNECT_TIMEOUT') ||
+        error.message?.includes('fetch failed')
+      ) {
         if (attempt === maxRetries) {
-          throw new Error('Database connection failed after multiple attempts. Please check your internet connection.')
+          throw new Error('Database connection failed after retries.')
         }
-        
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+        await new Promise(resolve => setTimeout(resolve, attempt * 500))
         continue
       }
-      
-      // For non-timeout errors, throw immediately
       throw error
     }
   }
 }
 
+// GET: Fetch temporary items for a table
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -60,32 +39,33 @@ export async function GET(request) {
       return await supabase
         .from('temporary_items')
         .select('*')
-        .eq('table_id', tableId) // tableId is string UUID, works fine
+        .eq('table_id', tableId)
         .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
     })
 
     if (error) throw error
 
-    return NextResponse.json({ data, error: null })
+    return NextResponse.json({ data: data || [], error: null }, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    })
   } catch (error) {
-    return NextResponse.json({ data: null, error: error.message }, { status: 500 })
+    return NextResponse.json({ data: [], error: error.message }, { status: 500 })
   }
 }
 
+// POST: Atomic Sync / Overwrite temporary items for a table
 export async function POST(request) {
   try {
     const body = await request.json()
     const { table_id, table_name, section, items } = body
 
-    if (!table_id || !items || items.length === 0) {
-      return NextResponse.json(
-        { error: 'Table ID and items are required' },
-        { status: 400 }
-      )
+    if (!table_id) {
+      return NextResponse.json({ error: 'Table ID is required' }, { status: 400 })
     }
 
-    // First, clear existing temporary items for this table
+    // 1. Clear existing items for table in 1 quick operation
     const { error: deleteError } = await withRetry(async () => {
       return await supabase
         .from('temporary_items')
@@ -94,209 +74,65 @@ export async function POST(request) {
     })
 
     if (deleteError) {
-      console.error('Delete error in POST:', deleteError)
-      throw new Error(`Failed to delete existing temporary items: ${deleteError.message}`)
+      console.error('Delete error in POST /temporary-items:', deleteError)
+      throw deleteError
     }
 
-    // Create bill items to insert - group by item_id to prevent duplicates
-    const groupedItems = {}
+    // If items list is empty, return clear confirmation
+    if (!items || items.length === 0) {
+      return NextResponse.json({ data: [], error: null })
+    }
+
+    // 2. Format & group items to prevent DB duplication
+    const grouped = {}
     items.forEach(item => {
       const id = item.id || item.item_id
-      if (groupedItems[id]) {
-        groupedItems[id].quantity += item.quantity
-        groupedItems[id].total += (item.price * item.quantity)
+      if (grouped[id]) {
+        grouped[id].quantity += (parseInt(item.quantity) || 1)
+        grouped[id].total += (parseFloat(item.price || 0) * (parseInt(item.quantity) || 1))
       } else {
-        groupedItems[id] = {
-          table_id, // UUID string
-          table_name,
-          section,
-          item_id: id, // UUID string
-          item_name: item.name || item.item_name,
-          item_category: item.category || item.item_category,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.price * item.quantity,
+        const qty = parseInt(item.quantity) || 1
+        const price = parseFloat(item.price) || 0
+        grouped[id] = {
+          table_id,
+          table_name: table_name || null,
+          section: section || null,
+          item_id: id,
+          item_name: item.name || item.item_name || 'Item',
+          item_category: item.category || item.item_category || 'General',
+          quantity: qty,
+          price: price,
+          total: price * qty,
           created_at: new Date().toISOString()
         }
       }
     })
 
-    const tempItems = Object.values(groupedItems)
+    const newRows = Object.values(grouped)
 
-    const { data, error } = await withRetry(async () => {
+    // 3. Insert all items in 1 batch insert
+    const { data: insertedData, error: insertError } = await withRetry(async () => {
       return await supabase
         .from('temporary_items')
-        .insert(tempItems)
+        .insert(newRows)
         .select()
     })
 
-    if (error) throw error
+    if (insertError) throw insertError
 
-    return NextResponse.json({ data, error: null })
+    return NextResponse.json({ data: insertedData || [], error: null })
   } catch (error) {
+    console.error('POST /temporary-items error:', error)
     return NextResponse.json({ data: null, error: error.message }, { status: 500 })
   }
 }
 
+// PUT: High-performance atomic update handler (reuses POST logic for fast single batch)
 export async function PUT(request) {
-  try {
-    const body = await request.json()
-    const { table_id, items } = body
-
-    if (!table_id || !items) {
-      return NextResponse.json(
-        { error: 'Table ID and items are required' },
-        { status: 400 }
-      )
-    }
-
-    // Get existing items
-    const { data: existingItems, error: fetchError } = await withRetry(async () => {
-      return await supabase
-        .from('temporary_items')
-        .select('*')
-        .eq('table_id', table_id)
-    })
-
-    if (fetchError) throw fetchError
-
-    // Process updates: add new items, update existing ones, remove deleted ones
-    // First, consolidate the incoming items list to prevent duplicates
-    const consolidatedItems = {}
-    items.forEach(item => {
-      const id = item.id || item.item_id
-      if (consolidatedItems[id]) {
-        consolidatedItems[id].quantity += item.quantity
-      } else {
-        consolidatedItems[id] = { ...item }
-      }
-    })
-
-    const itemsToProcess = Object.values(consolidatedItems)
-
-    // Map existing items by item_id (collect all rows per item_id to handle duplicates)
-    const existingByItemId = {}
-    ;(existingItems || []).forEach(item => {
-      const itemId = item.item_id
-      if (!existingByItemId[itemId]) {
-        existingByItemId[itemId] = []
-      }
-      existingByItemId[itemId].push(item)
-    })
-
-    const updates = []
-    const inserts = []
-    const deleteIds = []
-
-    // Determine updates, inserts, and duplicate deletions
-    itemsToProcess.forEach(incomingItem => {
-      const itemId = incomingItem.id || incomingItem.item_id
-      const existingRows = existingByItemId[itemId]
-
-      if (existingRows && existingRows.length > 0) {
-        // Update the first matching row
-        const firstRow = existingRows[0]
-        updates.push({
-          id: firstRow.id,
-          quantity: incomingItem.quantity,
-          total: incomingItem.price * incomingItem.quantity
-        })
-
-        // Delete any duplicate matching rows (self-healing)
-        if (existingRows.length > 1) {
-          existingRows.slice(1).forEach(row => {
-            deleteIds.push(row.id)
-          })
-        }
-      } else {
-        // Insert new row
-        inserts.push({
-          table_id,
-          table_name: body.table_name || existingItems?.[0]?.table_name || null,
-          section: body.section || existingItems?.[0]?.section || null,
-          item_id: itemId,
-          item_name: incomingItem.name || incomingItem.item_name,
-          item_category: incomingItem.category || incomingItem.item_category,
-          quantity: incomingItem.quantity,
-          price: incomingItem.price,
-          total: incomingItem.price * incomingItem.quantity,
-          created_at: new Date().toISOString()
-        })
-      }
-    })
-
-    // Determine deletions for removed items
-    Object.keys(existingByItemId).forEach(itemId => {
-      if (!consolidatedItems[itemId]) {
-        existingByItemId[itemId].forEach(row => {
-          deleteIds.push(row.id)
-        })
-      }
-    })
-
-    // Execute database operations
-    const dbOperations = []
-
-    // Batch Delete
-    if (deleteIds.length > 0) {
-      dbOperations.push(withRetry(async () => {
-        const { error } = await supabase
-          .from('temporary_items')
-          .delete()
-          .in('id', deleteIds)
-        if (error) throw error
-      }))
-    }
-
-    // Batch Insert
-    if (inserts.length > 0) {
-      dbOperations.push(withRetry(async () => {
-        const { error } = await supabase
-          .from('temporary_items')
-          .insert(inserts)
-        if (error) throw error
-      }))
-    }
-
-    // Parallel Updates
-    updates.forEach(updateInfo => {
-      dbOperations.push(withRetry(async () => {
-        const { error } = await supabase
-          .from('temporary_items')
-          .update({
-            quantity: updateInfo.quantity,
-            total: updateInfo.total,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', updateInfo.id)
-        if (error) throw error
-      }))
-    })
-
-    // Wait for all operations to complete
-    if (dbOperations.length > 0) {
-      await Promise.all(dbOperations)
-    }
-
-    // Fetch updated items to return to the client
-    const { data: updatedItems, error: finalFetchError } = await withRetry(async () => {
-      const query = supabase
-        .from('temporary_items')
-        .select('*')
-        .eq('table_id', table_id)
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-      return await query
-    })
-
-    if (finalFetchError) throw finalFetchError
-
-    return NextResponse.json({ data: updatedItems, error: null })
-  } catch (error) {
-    return NextResponse.json({ data: null, error: error.message }, { status: 500 })
-  }
+  return POST(request)
 }
 
+// DELETE: Clear temporary items for a table
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -316,7 +152,7 @@ export async function DELETE(request) {
 
     if (error) throw error
 
-    return NextResponse.json({ data, error: null })
+    return NextResponse.json({ data: data || [], error: null })
   } catch (error) {
     return NextResponse.json({ data: null, error: error.message }, { status: 500 })
   }

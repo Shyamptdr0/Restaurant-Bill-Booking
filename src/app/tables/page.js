@@ -33,10 +33,11 @@ export default function TablesPage() {
   useEffect(() => {
     fetchTables()
     
-    // Auto-refresh tables every 3 seconds for multi-device sync
+    // Refresh tables every 4 seconds when active, pause when tab hidden
     const intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
       fetchTables()
-    }, 3000)
+    }, 4000)
     
     return () => clearInterval(intervalId)
   }, [])

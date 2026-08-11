@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { ArrowLeft, Printer, Home, Settings, Save } from 'lucide-react'
 import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
+import { printThermalBill, getStoredPrinterSettings } from '@/lib/thermal-printer'
 
 export default function PrintBill() {
   const [bill, setBill] = useState(null)
@@ -145,7 +146,6 @@ export default function PrintBill() {
     console.log('handlePrint triggered');
     try {
       setIsPrinting(true)
-      console.log('isPrinting set to true')
       
       // Brief delay to allow print overlay/spinner UI to render
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -174,15 +174,41 @@ export default function PrintBill() {
       }
       
       await Promise.all(updatePromises);
-      console.log('API updates finished');
       
-      // Hide spinner FIRST, so it's not in the print dialog
-      setIsPrinting(false)
+      const stored = getStoredPrinterSettings()
       
-      // Give React a tiny window to unmount the overlay before window.print() blocks
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      window.print()
+      if (stored.printMode === 'thermal' && bill) {
+        // Attempt silent ESC/POS direct thermal print
+        const printResult = await printThermalBill({
+          billNo: bill.bill_number || bill.id,
+          tableNo: bill.table_name || 'Parcel',
+          date: bill.created_at ? new Date(bill.created_at).toLocaleString('en-IN') : new Date().toLocaleString('en-IN'),
+          customerName: bill.customer_name || 'Walk-in Customer',
+          customerPhone: bill.customer_phone || '',
+          paymentType: bill.payment_type || bill.payment_method || 'CASH',
+          items: billItems.map(item => ({
+            name: item.item_name || item.name,
+            qty: item.quantity,
+            price: item.price,
+            total: item.total || (item.price * item.quantity)
+          })),
+          subtotal: bill.subtotal || bill.total_amount,
+          discount: bill.discount || 0,
+          cgst: bill.tax_amount ? bill.tax_amount / 2 : 0,
+          sgst: bill.tax_amount ? bill.tax_amount / 2 : 0,
+          grandTotal: bill.final_amount || bill.total_amount
+        }, stored)
+
+        setIsPrinting(false)
+        if (!printResult.success) {
+          console.warn('Thermal print failed, falling back to window.print():', printResult.error)
+          window.print()
+        }
+      } else {
+        setIsPrinting(false)
+        await new Promise(resolve => setTimeout(resolve, 50));
+        window.print()
+      }
       
       setTimeout(() => {
         router.push('/tables')

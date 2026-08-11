@@ -1,44 +1,23 @@
-import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  {
-    db: {
-      schema: 'public'
-    },
-    auth: {
-      persistSession: false
-    },
-    global: {
-      headers: {
-        'Connection': 'keep-alive'
-      }
-    }
-  }
-)
+export const dynamic = 'force-dynamic'
 
-// Helper function for retry logic
-async function withRetry(operation, maxRetries = 3) {
+// Retry helper
+async function withRetry(operation, maxRetries = 2) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await operation()
     } catch (error) {
-      // Check if it's a connection timeout error
-      if (error.message?.includes('Connect Timeout Error') || 
-          error.message?.includes('UND_ERR_CONNECT_TIMEOUT') ||
-          error.message?.includes('fetch failed')) {
-        
-        if (attempt === maxRetries) {
-          throw new Error('Database connection failed after multiple attempts. Please check your internet connection.')
-        }
-        
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+      if (
+        error.message?.includes('Connect Timeout Error') || 
+        error.message?.includes('UND_ERR_CONNECT_TIMEOUT') ||
+        error.message?.includes('fetch failed')
+      ) {
+        if (attempt === maxRetries) throw error
+        await new Promise(resolve => setTimeout(resolve, attempt * 500))
         continue
       }
-      
-      // For non-timeout errors, throw immediately
       throw error
     }
   }
@@ -49,37 +28,23 @@ export async function GET() {
     const { data, error } = await withRetry(async () => {
       return await supabase
         .from('tables')
-        .select('*')
+        .select('id, name, section, status, created_at')
         .order('created_at', { ascending: false })
     })
 
     if (error) {
-      console.error('Supabase error:', error)
-      return new Response(JSON.stringify({ 
-        error: 'Database connection failed', 
-        details: error.message,
-        tables: [] // Return empty array as fallback
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      console.error('Supabase tables error:', error)
+      return NextResponse.json({ error: error.message, tables: [] }, { status: 500 })
     }
 
-    return new Response(JSON.stringify(data || []), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    return NextResponse.json(data || [], {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     })
   } catch (error) {
-    console.error('API error:', error)
-    // Return empty array as fallback on connection errors
-    return new Response(JSON.stringify({ 
-      error: 'Connection timeout', 
-      tables: [],
-      message: 'Unable to connect to database. Please check your internet connection.'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    console.error('GET /api/tables error:', error)
+    return NextResponse.json({ error: error.message, tables: [] }, { status: 500 })
   }
 }
 
@@ -89,10 +54,7 @@ export async function POST(request) {
     const { name, section, status } = body
 
     if (!name || !section) {
-      return new Response(JSON.stringify({ error: 'Name and section are required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return NextResponse.json({ error: 'Name and section are required' }, { status: 400 })
     }
 
     const { data, error } = await withRetry(async () => {
@@ -110,23 +72,11 @@ export async function POST(request) {
         .single()
     })
 
-    if (error) {
-      console.error('Supabase error:', error)
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
+    if (error) throw error
 
-    return new Response(JSON.stringify(data), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return NextResponse.json(data, { status: 201 })
   } catch (error) {
-    console.error('API error:', error)
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    console.error('POST /api/tables error:', error)
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
   }
 }

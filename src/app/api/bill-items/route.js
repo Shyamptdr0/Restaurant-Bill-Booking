@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+import { supabase } from '@/lib/supabase'
 
 export async function POST(request) {
   try {
@@ -46,63 +41,57 @@ export async function POST(request) {
       .select()
 
     if (error) {
-      console.error('Supabase error:', error)
+      console.error('Supabase error in bill_items insert:', error)
       throw error
     }
 
     // Update Inventory (Decrement Stock)
     try {
-      console.log('Starting inventory deduction for bill items (batch):', billItems.length, 'line items');
+      // First attempt RPC for all items
       for (const item of billItems) {
-        // Attempt atomic decrement via RPC first
         const { error: rpcError } = await supabase.rpc('decrement_stock', { 
           inv_id: item.item_id, 
           amount: parseInt(item.quantity) 
-        });
+        })
 
-        // Fallback to manual fetch-and-update
+        // If RPC fails (e.g. function not created in DB yet), perform batch fallback
         if (rpcError) {
-          console.log(`RPC decrement_stock failed for item ₹{item.item_id}, falling back to direct update. Error: ₹{rpcError.message}`);
-          
-          const { data: menuItem, error: fetchError } = await supabase
+          const itemIds = billItems.map(i => i.item_id)
+          const { data: menuItems } = await supabase
             .from('menu_items')
-            .select('track_inventory, stock_quantity, name')
-            .eq('id', item.item_id)
-            .single();
+            .select('id, track_inventory, stock_quantity, name')
+            .in('id', itemIds)
 
-          if (!fetchError && menuItem?.track_inventory) {
-            const currentStock = menuItem.stock_quantity || 0;
-            const newStock = Math.max(0, currentStock - item.quantity);
-            
-            console.log(`Deducting stock for ₹{menuItem.name}: ₹{currentStock} -> ₹{newStock}`);
-            
-            const { error: updateError } = await supabase
-              .from('menu_items')
-              .update({ stock_quantity: newStock })
-              .eq('id', item.item_id);
-              
-            if (updateError) console.error(`Failed to update stock for ₹{menuItem.name}:`, updateError);
-          } else if (fetchError) {
-            console.error(`Failed to fetch menu item ₹{item.item_id}:`, fetchError);
+          if (menuItems && menuItems.length > 0) {
+            const menuMap = new Map(menuItems.map(m => [m.id, m]))
+            for (const bItem of billItems) {
+              const menuItem = menuMap.get(bItem.item_id)
+              if (menuItem && menuItem.track_inventory) {
+                const currentStock = menuItem.stock_quantity || 0
+                const newStock = Math.max(0, currentStock - bItem.quantity)
+                await supabase
+                  .from('menu_items')
+                  .update({ stock_quantity: newStock })
+                  .eq('id', bItem.item_id)
+              }
+            }
           }
-        } else {
-          console.log(`Successfully decremented stock for item ₹{item.item_id} via RPC`);
+          break; // Batch processed all items in fallback
         }
       }
     } catch (invError) {
-      console.error('Critical error in inventory update loop:', invError);
+      console.error('Error updating stock inventory:', invError)
     }
 
-    // Return proper JSON response
     return NextResponse.json({ 
       data: data || [], 
       error: null 
     })
   } catch (error) {
     console.error('Error adding bill items:', error)
-    return NextResponse.json({ 
-      error: error.message || 'Internal server error',
-      status: 500 
-    })
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    )
   }
 }

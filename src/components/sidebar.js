@@ -32,7 +32,7 @@ const navigation = [
 	{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Item Analysis', href: '/item-analysis', icon: BarChart3 },
   { name: 'Bill History', href: '/billing/history', icon: History },
-  
+  { name: 'Printer Settings', href: '/printer-settings', icon: Settings },
 ]
 
 export function Sidebar() {

@@ -53,10 +53,11 @@ function CreateBillContent() {
     let intervalId;
     if (tableId) {
       fetchTemporaryItems()
-      // Auto-refresh temporary items every 3 seconds for multi-device sync
+      // Auto-refresh temporary items every 4 seconds when active
       intervalId = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return
         fetchTemporaryItems()
-      }, 3000)
+      }, 4000)
     } else {
       setCart([])
     }

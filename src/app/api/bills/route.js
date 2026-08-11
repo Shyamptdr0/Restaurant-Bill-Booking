@@ -288,42 +288,34 @@ export async function POST(request) {
 
     // Phase 3: Update Inventory (Decrement Stock)
     try {
-      console.log('Starting inventory deduction for bill items:', billItems.length, 'line items');
-
       for (const item of billItems) {
-        // Attempt atomic decrement via RPC first
         const { error: rpcError } = await supabase.rpc('decrement_stock', {
           inv_id: item.item_id,
           amount: parseInt(item.quantity)
         });
 
-        // If RPC fails (e.g., doesn't exist), fallback to manual fetch-and-update
         if (rpcError) {
-          console.log(`RPC decrement_stock failed for item ₹{item.item_id}, falling back to direct update. Error: ₹{rpcError.message}`);
-
-          const { data: menuItem, error: fetchError } = await supabase
+          const itemIds = billItems.map(i => i.item_id)
+          const { data: menuItems } = await supabase
             .from('menu_items')
-            .select('track_inventory, stock_quantity, name')
-            .eq('id', item.item_id)
-            .single();
+            .select('id, track_inventory, stock_quantity, name')
+            .in('id', itemIds)
 
-          if (!fetchError && menuItem?.track_inventory) {
-            const currentStock = menuItem.stock_quantity || 0;
-            const newStock = Math.max(0, currentStock - item.quantity);
-
-            console.log(`Deducting stock for ₹{menuItem.name}: ₹{currentStock} -> ₹{newStock}`);
-
-            const { error: updateError } = await supabase
-              .from('menu_items')
-              .update({ stock_quantity: newStock })
-              .eq('id', item.item_id);
-
-            if (updateError) console.error(`Failed to update stock for ₹{menuItem.name}:`, updateError);
-          } else if (fetchError) {
-            console.error(`Failed to fetch menu item ₹{item.item_id}:`, fetchError);
+          if (menuItems && menuItems.length > 0) {
+            const menuMap = new Map(menuItems.map(m => [m.id, m]))
+            for (const bItem of billItems) {
+              const menuItem = menuMap.get(bItem.item_id)
+              if (menuItem && menuItem.track_inventory) {
+                const currentStock = menuItem.stock_quantity || 0
+                const newStock = Math.max(0, currentStock - bItem.quantity)
+                await supabase
+                  .from('menu_items')
+                  .update({ stock_quantity: newStock })
+                  .eq('id', bItem.item_id)
+              }
+            }
           }
-        } else {
-          console.log(`Successfully decremented stock for item ₹{item.item_id} via RPC`);
+          break;
         }
       }
     } catch (invError) {

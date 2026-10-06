@@ -167,7 +167,18 @@ const generateWeeklySalesFallback = (allBills = []) => {
 /* ---------------------- COMPONENT ---------------------- */
 
 export default function Dashboard() {
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_dashboard_summary')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && parsed.stats) return false
+        }
+      } catch (e) {}
+    }
+    return true
+  })
   const [currentDate, setCurrentDate] = useState(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -183,22 +194,44 @@ export default function Dashboard() {
   const [chartContextDate, setChartContextDate] = useState(new Date())
   const [chartData, setChartData] = useState([])
 
-  const [stats, setStats] = useState({
-    todaySales: 0,
-    todayBills: 0,
-    totalItems: 0,
-    weeklySales: [],
-    monthlyRevenue: 0,
-    averageOrderValue: 0,
-    activeMenuItems: 0,
+  const [stats, setStats] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_dashboard_summary')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && parsed.stats) return parsed.stats
+        }
+      } catch (e) {}
+    }
+    return {
+      todaySales: 0,
+      todayBills: 0,
+      totalItems: 0,
+      weeklySales: [],
+      monthlyRevenue: 0,
+      averageOrderValue: 0,
+      activeMenuItems: 0,
+    }
   })
 
-  const [monthly, setMonthly] = useState({
-    revenue: 0,
-    bills: 0,
-    customers: 0,
-    avgOrder: 0,
-    growth: 0,
+  const [monthly, setMonthly] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_dashboard_summary')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && parsed.monthly) return parsed.monthly
+        }
+      } catch (e) {}
+    }
+    return {
+      revenue: 0,
+      bills: 0,
+      customers: 0,
+      avgOrder: 0,
+      growth: 0,
+    }
   })
 
   const [topSelling, setTopSelling] = useState([])
@@ -215,9 +248,31 @@ export default function Dashboard() {
   const [exportFormat, setExportFormat] = useState('csv')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [itemToDelete, setItemToDelete] = useState(null)
-  const [recentBills, setRecentBills] = useState([])
+  const [recentBills, setRecentBills] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_dashboard_summary')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && parsed.recentBills) return parsed.recentBills
+        }
+      } catch (e) {}
+    }
+    return []
+  })
   const [menuItems, setMenuItems] = useState([])
-  const [allBills, setAllBills] = useState([])
+  const [allBills, setAllBills] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_dashboard_summary')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && parsed.allBills) return parsed.allBills
+        }
+      } catch (e) {}
+    }
+    return []
+  })
   const [liveData, setLiveData] = useState({})
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(30000)
@@ -495,6 +550,23 @@ export default function Dashboard() {
            }
         })
         .catch(err => console.error("Failed to fetch all bills for insights", err))
+
+      // Cache dashboard summary for instant 0ms loads
+      try {
+        sessionStorage.setItem('cached_dashboard_summary', JSON.stringify({
+          stats: newStats,
+          monthly: {
+            revenue: serverData.monthly?.data?.revenue || 0,
+            bills: serverData.monthly?.data?.bills || 0,
+            customers: serverData.monthly?.data?.customers || 0,
+            avgOrder: serverData.monthly?.data?.avgOrderValue || 0,
+            growth: serverData.monthly?.data?.growth || 0
+          },
+          recentBills: dashData.recentBills || [],
+          topSelling: serverData.topSelling?.data || [],
+          allBills: allBills
+        }))
+      } catch (e) {}
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -836,7 +908,9 @@ export default function Dashboard() {
     new Date(bill.created_at).toDateString() === today
   ) || []
 
-  // Loading block removed for instant rendering
+  if (loading) {
+    return <DashboardSkeleton />
+  }
 
   const getContextLabel = () => {
     if (timeframe === '1Y') return `Year: ${chartContextDate.getFullYear()}`
@@ -1333,5 +1407,92 @@ function QuickAction({ title, icon: Icon, href }) {
         </CardContent>
       </Card>
     </Link>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <AuthGuard>
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
+          <Sidebar />
+        </aside>
+
+        <div className="flex flex-1 flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+
+          <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 lg:space-y-8 animate-pulse">
+            {/* Header Skeleton */}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="space-y-2">
+                <div className="h-8 w-64 bg-gray-300 rounded-md"></div>
+                <div className="h-4 w-40 bg-gray-200 rounded-md"></div>
+              </div>
+              <div className="flex gap-2">
+                <div className="h-10 w-24 bg-gray-300 rounded-lg"></div>
+                <div className="h-10 w-28 bg-gray-300 rounded-lg"></div>
+              </div>
+            </div>
+
+            {/* Dark Analytics Cards Skeleton */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-28 bg-gray-900 rounded-xl p-4 border border-gray-800 space-y-3">
+                  <div className="h-4 w-20 bg-gray-700 rounded"></div>
+                  <div className="h-7 w-28 bg-gray-600 rounded"></div>
+                  <div className="h-3 w-16 bg-gray-800 rounded"></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Market Trend Chart Skeleton */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between border-b pb-4">
+                <div className="space-y-2">
+                  <div className="h-6 w-48 bg-gray-300 rounded"></div>
+                  <div className="h-4 w-64 bg-gray-200 rounded"></div>
+                </div>
+                <div className="h-8 w-36 bg-gray-200 rounded-md"></div>
+              </div>
+              <div className="h-[320px] w-full bg-gray-100 rounded-lg flex items-end justify-between p-4 gap-3">
+                {[40, 65, 30, 80, 55, 90, 45, 70, 85, 50, 60, 75].map((height, idx) => (
+                  <div
+                    key={idx}
+                    className="w-full bg-gray-300 rounded-t-sm"
+                    style={{ height: `${height}%` }}
+                  ></div>
+                ))}
+              </div>
+            </div>
+
+            {/* Monthly Summary Cards Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 space-y-3 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <div className="h-4 w-32 bg-gray-200 rounded"></div>
+                    <div className="h-8 w-8 bg-gray-100 rounded-lg"></div>
+                  </div>
+                  <div className="h-8 w-36 bg-gray-300 rounded"></div>
+                  <div className="h-4 w-24 bg-gray-100 rounded"></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Actions Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 flex items-center gap-4 shadow-sm">
+                  <div className="h-8 w-8 bg-gray-200 rounded-full"></div>
+                  <div className="h-5 w-28 bg-gray-300 rounded"></div>
+                </div>
+              ))}
+            </div>
+          </main>
+        </div>
+      </div>
+    </AuthGuard>
   )
 }

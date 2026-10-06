@@ -34,23 +34,80 @@ const formatCurrency = (value) => {
     })}`
   }
 
+const calculateStats = (allBills) => {
+  if (!Array.isArray(allBills)) return { totalBills: 0, totalRevenue: 0, todayRevenue: 0 }
+  
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  const todayBills = allBills.filter(bill => {
+    const billDate = new Date(bill.created_at)
+    return billDate >= today
+  })
+  
+  const todayRevenue = todayBills.reduce((sum, bill) => sum + (parseFloat(bill.subtotal) || 0), 0)
+  const totalRevenue = allBills.reduce((sum, bill) => sum + (parseFloat(bill.subtotal) || 0), 0)
+  
+  return {
+    totalBills: allBills.length,
+    totalRevenue: totalRevenue,
+    todayRevenue: todayRevenue
+  }
+}
+
 export default function BillHistory() {
   const router = useRouter()
-  const [bills, setBills] = useState([])
+  
+  const [bills, setBills] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_history_bills')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {}
+    }
+    return []
+  })
+
+  const [stats, setStats] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_history_bills')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return calculateStats(parsed)
+          }
+        }
+      } catch (e) {}
+    }
+    return {
+      totalBills: 0,
+      totalRevenue: 0,
+      todayRevenue: 0
+    }
+  })
+
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('cached_history_bills')
+        if (cached && JSON.parse(cached)?.length > 0) return false
+      } catch (e) {}
+    }
+    return true
+  })
+
   const [filteredBills, setFilteredBills] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [paymentFilter, setPaymentFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
   const [tableFilter, setTableFilter] = useState('all')
-  const [loading, setLoading] = useState(true)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [billToDelete, setBillToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [stats, setStats] = useState({
-    totalBills: 0,
-    totalRevenue: 0,
-    todayRevenue: 0
-  })
   const [showTotalRevenue, setShowTotalRevenue] = useState(false)
   const [showTodayRevenue, setShowTodayRevenue] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -58,39 +115,19 @@ export default function BillHistory() {
 
   const fetchBills = useCallback(async () => {
     try {
-      // Fetch all bills to populate history properly
       const response = await fetch('/api/bills?fetch_all=true')
       const result = await response.json()
       const allBills = result.data || []
       
-      // Debug: Log the actual number of bills returned
-      console.log('Total bills from API:', allBills.length)
-      console.log('First 5 bills:', allBills.slice(0, 5).map(bill => ({ id: bill.id, bill_no: bill.bill_no, status: bill.status })))
-      
-      // Temporarily show all bills to debug
-      setBills(allBills || [])
-      
-      // Calculate stats from local bills
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      const todayBills = allBills?.filter(bill => {
-        const billDate = new Date(bill.created_at)
-        return billDate >= today
-      }) || []
-      
-      const todayRevenue = todayBills.reduce((sum, bill) => sum + (bill.subtotal || 0), 0)
-      const totalRevenue = allBills?.reduce((sum, bill) => sum + (bill.subtotal || 0), 0) || 0
-      
-      setStats({
-        totalBills: allBills?.length || 0,
-        totalRevenue: totalRevenue,
-        todayRevenue: todayRevenue
-      })
-      
+      setBills(allBills)
+      const computedStats = calculateStats(allBills)
+      setStats(computedStats)
+
+      try {
+        sessionStorage.setItem('cached_history_bills', JSON.stringify(allBills))
+      } catch (e) {}
     } catch (error) {
       console.error('Error fetching bills:', error)
-      setBills([])
     } finally {
       setLoading(false)
     }
@@ -289,7 +326,11 @@ export default function BillHistory() {
       
       if (response.ok) {
         // Optimistically remove from state for instant UI feedback
-        setBills(prev => prev.filter(b => b.id !== targetBill.id))
+        setBills(prev => {
+          const updated = prev.filter(b => b.id !== targetBill.id)
+          try { sessionStorage.setItem('cached_history_bills', JSON.stringify(updated)) } catch(e) {}
+          return updated
+        })
         setFilteredBills(prev => prev.filter(b => b.id !== targetBill.id))
 
         import('sonner').then(({ toast }) => {

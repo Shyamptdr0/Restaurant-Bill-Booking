@@ -13,19 +13,83 @@ import { Label } from '@/components/ui/label'
 import { ArrowLeft, Printer, Home, Settings, Save } from 'lucide-react'
 import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
-import { printThermalBill, getStoredPrinterSettings } from '@/lib/thermal-printer'
+// Helper function to group items by item_id or name to prevent duplicates
+const groupItems = (items) => {
+  if (!items || !Array.isArray(items)) return []
+  
+  const grouped = {}
+  items.forEach(item => {
+    const itemId = String(item.item_id || item.id || item.item_name || item.name)
+    
+    if (grouped[itemId]) {
+      grouped[itemId].quantity = (parseInt(grouped[itemId].quantity) || 0) + (parseInt(item.quantity) || 0)
+      grouped[itemId].total = (parseFloat(grouped[itemId].price) || 0) * grouped[itemId].quantity
+    } else {
+      grouped[itemId] = { 
+        ...item,
+        quantity: parseInt(item.quantity) || 0,
+        price: parseFloat(item.price) || 0,
+        total: (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)
+      }
+    }
+  })
+  
+  return Object.values(grouped)
+}
 
 export default function PrintBill() {
-  const [bill, setBill] = useState(null)
-  const [billItems, setBillItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [isPrinting, setIsPrinting] = useState(false)
-  const [printSettings, setPrintSettings] = useState({})
-  const [showCustomize, setShowCustomize] = useState(false)
-  const [tempSettings, setTempSettings] = useState({})
   const params = useParams()
   const router = useRouter()
   const billId = params.billId
+
+  const [bill, setBill] = useState(() => {
+    if (typeof window !== 'undefined' && billId) {
+      try {
+        const cached = sessionStorage.getItem(`cached_bill_${billId}`) || sessionStorage.getItem('last_created_bill')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && (parsed.id === billId || String(parsed.id) === String(billId))) {
+            return parsed
+          }
+        }
+      } catch (e) {}
+    }
+    return null
+  })
+
+  const [billItems, setBillItems] = useState(() => {
+    if (typeof window !== 'undefined' && billId) {
+      try {
+        const cached = sessionStorage.getItem(`cached_bill_${billId}`) || sessionStorage.getItem('last_created_bill')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && (parsed.id === billId || String(parsed.id) === String(billId))) {
+            return groupItems(parsed.items || [])
+          }
+        }
+      } catch (e) {}
+    }
+    return []
+  })
+
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined' && billId) {
+      try {
+        const cached = sessionStorage.getItem(`cached_bill_${billId}`) || sessionStorage.getItem('last_created_bill')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && (parsed.id === billId || String(parsed.id) === String(billId))) {
+            return false
+          }
+        }
+      } catch (e) {}
+    }
+    return true
+  })
+
+  const [printSettings, setPrintSettings] = useState({})
+  const [showCustomize, setShowCustomize] = useState(false)
+  const [tempSettings, setTempSettings] = useState({})
 
   useEffect(() => {
     fetchBillDetails()
@@ -34,19 +98,15 @@ export default function PrintBill() {
 
   useEffect(() => {
     if (bill && !loading && printSettings.autoPrint) {
-      // Auto print after component mounts
-      setIsPrinting(true)
-      // Give the user 200ms to see the preparing screen
-      setTimeout(async () => {
-        setIsPrinting(false)
-        // Wait for overlay to unmount
-        await new Promise(resolve => setTimeout(resolve, 50));
-        window.print()
-        // Redirect after auto print
-        setTimeout(() => {
+      // Auto print immediately
+      window.print()
+      if (bill && bill.table_id) {
+        const handleAfterPrint = () => {
+          window.removeEventListener('afterprint', handleAfterPrint)
           router.push('/tables')
-        }, 500)
-      }, 200)
+        }
+        window.addEventListener('afterprint', handleAfterPrint)
+      }
     }
   }, [bill, loading, printSettings])
 
@@ -97,31 +157,6 @@ export default function PrintBill() {
     return (item.price * item.quantity) * serviceTaxRate;
   };
 
-  // Helper function to group items by item_id or name to prevent duplicates
-  const groupItems = (items) => {
-    if (!items || !Array.isArray(items)) return []
-    
-    const grouped = {}
-    items.forEach(item => {
-      // Use item_id as primary key, fallback to id, then item_name, then name
-      const itemId = String(item.item_id || item.id || item.item_name || item.name)
-      
-      if (grouped[itemId]) {
-        grouped[itemId].quantity = (parseInt(grouped[itemId].quantity) || 0) + (parseInt(item.quantity) || 0)
-        grouped[itemId].total = (parseFloat(grouped[itemId].price) || 0) * grouped[itemId].quantity
-      } else {
-        grouped[itemId] = { 
-          ...item,
-          quantity: parseInt(item.quantity) || 0,
-          price: parseFloat(item.price) || 0,
-          total: (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)
-        }
-      }
-    })
-    
-    return Object.values(grouped)
-  }
-
   const fetchBillDetails = async () => {
     try {
       const response = await fetch(`/api/bills/${billId}?_t=${Date.now()}`)
@@ -133,95 +168,57 @@ export default function PrintBill() {
 
       setBill(result.data)
       setBillItems(groupItems(result.data.items || []))
+      try {
+        sessionStorage.setItem(`cached_bill_${billId}`, JSON.stringify(result.data))
+      } catch (e) {}
     } catch (error) {
       console.error('Error fetching bill details:', error)
-      alert('Error loading bill: ' + error.message)
-      router.push('/billing/create')
+      if (!bill) {
+        alert('Error loading bill: ' + error.message)
+        router.push('/billing/create')
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  const handlePrint = async () => {
-    console.log('handlePrint triggered');
+  const handlePrint = () => {
+    // 1. Immediately fire API updates in the background without blocking the UI
     try {
-      setIsPrinting(true)
-      
-      // Brief delay to allow print overlay/spinner UI to render
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // Start API updates in parallel
-      const updatePromises = [
-        fetch(`/api/bills/${billId}`, {
+      fetch(`/api/bills/${billId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'printed' }),
+        keepalive: true
+      }).catch(err => console.error('Error updating bill status:', err))
+
+      if (bill && bill.table_id) {
+        fetch(`/api/tables/${bill.table_id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'printed' })
-        })
-      ]
-      
-      if (bill && bill.table_id) {
-        updatePromises.push(
-          fetch(`/api/tables/${bill.table_id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: bill.table_name,
-              section: bill.section,
-              status: 'paid'
-            })
-          })
-        )
+          body: JSON.stringify({
+            name: bill.table_name,
+            section: bill.section,
+            status: 'paid'
+          }),
+          keepalive: true
+        }).catch(err => console.error('Error updating table status:', err))
       }
-      
-      await Promise.all(updatePromises);
-      
-      const stored = getStoredPrinterSettings()
-      
-      if (stored.printMode === 'thermal' && bill) {
-        // Attempt silent ESC/POS direct thermal print
-        const printResult = await printThermalBill({
-          billNo: bill.bill_number || bill.id,
-          tableNo: bill.table_name || 'Parcel',
-          date: bill.created_at ? new Date(bill.created_at).toLocaleString('en-IN') : new Date().toLocaleString('en-IN'),
-          customerName: bill.customer_name || 'Walk-in Customer',
-          customerPhone: bill.customer_phone || '',
-          paymentType: bill.payment_type || bill.payment_method || 'CASH',
-          items: billItems.map(item => ({
-            name: item.item_name || item.name,
-            qty: item.quantity,
-            price: item.price,
-            total: item.total || (item.price * item.quantity)
-          })),
-          subtotal: bill.subtotal || bill.total_amount,
-          discount: bill.discount || 0,
-          cgst: bill.tax_amount ? bill.tax_amount / 2 : 0,
-          sgst: bill.tax_amount ? bill.tax_amount / 2 : 0,
-          grandTotal: bill.final_amount || bill.total_amount
-        }, stored)
-
-        setIsPrinting(false)
-        if (!printResult.success) {
-          console.warn('Thermal print failed, falling back to window.print():', printResult.error)
-          window.print()
-        }
-      } else {
-        setIsPrinting(false)
-        await new Promise(resolve => setTimeout(resolve, 50));
-        window.print()
-      }
-      
-      setTimeout(() => {
-        router.push('/tables')
-      }, 500)
-      
     } catch (error) {
-      console.error('Error in handlePrint:', error)
-      setIsPrinting(false)
-      window.print()
-      setTimeout(() => {
-        router.push('/tables')
-      }, 500)
+      console.error('Error initiating background sync:', error)
     }
+
+    // 2. Setup redirect after print dialog finishes (if bill belongs to a table)
+    const handleAfterPrint = () => {
+      window.removeEventListener('afterprint', handleAfterPrint)
+      if (bill && bill.table_id) {
+        router.push('/tables')
+      }
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+
+    // 3. Immediately open print window popup with zero delay
+    window.print()
   }
 
   const handleNewBill = () => {
@@ -357,20 +354,10 @@ export default function PrintBill() {
                     </Button>
                     <Button 
                       onClick={handlePrint} 
-                      className="flex items-center justify-center bg-black hover:bg-gray-900 text-white"
-                      disabled={isPrinting}
+                      className="flex items-center justify-center bg-black hover:bg-gray-900 text-white cursor-pointer"
                     >
-                      {isPrinting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Preparing...
-                        </>
-                      ) : (
-                        <>
-                          <Printer className="h-4 w-4 mr-2" />
-                          Print Bill
-                        </>
-                      )}
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print Bill
                     </Button>
                     <Button onClick={handleNewBill} variant="outline" className="flex items-center justify-center">
                       <Home className="h-4 w-4 mr-2" />
@@ -674,18 +661,7 @@ export default function PrintBill() {
           </div>
         </div>
 
-        {/* Loading Overlay when printing - Normal UI design */}
-        {isPrinting && (
-          <div className="fixed inset-0 bg-white/95 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center no-print">
-            <div className="flex flex-col items-center space-y-6">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-20 w-auto animate-pulse" />
-              <div className="flex flex-col items-center space-y-3">
-                <div className="animate-spin rounded-full h-24 w-24 border-b-2 border-orange-600"></div>
-                <p className="text-orange-600 text-lg font-bold animate-pulse">Preparing Bill...</p>
-              </div>
-            </div>
-          </div>
-        )}
+
       </AuthGuard>
     )
   }

@@ -192,39 +192,27 @@ export default function PrintFromTemporary() {
 
   const handlePrint = async () => {
     try {
-      setIsPrinting(true)
-      
-      // Brief delay to allow print overlay/spinner UI to render
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
       let finalBill = bill
       if (!finalBill) {
+        setIsPrinting(true)
         finalBill = await createFinalBill()
+        setIsPrinting(false)
         if (!finalBill) {
-          setIsPrinting(false)
           return
         }
       }
       
-      // Hide spinner so it doesn't appear in print dialog
-      setIsPrinting(false)
-      
-      // Small buffer for React to unmount overlay
-      await new Promise(resolve => setTimeout(resolve, 50))
-      
-      window.print()
-      
-      // Redirect to tables page after printing
-      setTimeout(() => {
+      const handleAfterPrint = () => {
+        window.removeEventListener('afterprint', handleAfterPrint)
         router.push('/tables')
-      }, 500)
+      }
+      window.addEventListener('afterprint', handleAfterPrint)
+
+      window.print()
     } catch (error) {
       console.error('Error in handlePrint:', error)
       setIsPrinting(false)
       window.print()
-      setTimeout(() => {
-        router.push('/tables')
-      }, 500)
     }
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,12 +15,20 @@ import { Navbar } from '@/components/navbar'
 import { ArrowLeft, Plus, Minus, Search, Trash2, Receipt, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 
-function CreateBillContent() {
-  const searchParams = useSearchParams()
-  const tableId = searchParams.get('tableId')
-  const tableName = searchParams.get('tableName')
-  const section = searchParams.get('section')
-  
+// Parse query params directly from URL — no Suspense boundary needed
+function getQueryParams() {
+  if (typeof window === 'undefined') return { tableId: null, tableName: null, section: null }
+  const p = new URLSearchParams(window.location.search)
+  return {
+    tableId: p.get('tableId'),
+    tableName: p.get('tableName'),
+    section: p.get('section'),
+  }
+}
+
+export default function CreateBill() {
+  const { tableId, tableName, section } = getQueryParams()
+
   const [menuItems, setMenuItems] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -679,13 +687,5 @@ function CreateBillContent() {
         </Dialog>
       </div>
     </AuthGuard>
-  )
-}
-
-export default function CreateBill() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <CreateBillContent />
-    </Suspense>
   )
 }

@@ -17,6 +17,15 @@ import { cn } from '@/lib/utils'
 
 export default function TablesPage() {
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_tables')
+        if (cached && JSON.parse(cached)?.length > 0) return false
+      } catch (e) {}
+    }
+    return true
+  })
   const [tables, setTables] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -45,6 +54,24 @@ export default function TablesPage() {
 
   useEffect(() => {
     fetchTables()
+
+    // 2-second max skeleton animation timer
+    const skeletonTimer = setTimeout(() => {
+      setIsLoading(false)
+    }, 2000)
+    
+    // Prefetch create bill page for instant navigation
+    try { router.prefetch('/billing/create') } catch(e) {}
+
+    // Pre-warm menu items cache in background so create page loads instantly
+    try {
+      fetch('/api/menu-items').then(res => res.ok && res.json()).then(data => {
+        if (data?.data?.length > 0) {
+          const active = data.data.filter(item => item.status !== 'inactive')
+          localStorage.setItem('cached_menu_items', JSON.stringify(active))
+        }
+      }).catch(() => {})
+    } catch(e) {}
     
     // Refresh tables every 4 seconds when active, pause when tab hidden
     const intervalId = setInterval(() => {
@@ -68,6 +95,7 @@ export default function TablesPage() {
     window.addEventListener('app:refresh-data', handleAppRefresh)
 
     return () => {
+      clearTimeout(skeletonTimer)
       clearInterval(intervalId)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('app:refresh-data', handleAppRefresh)
@@ -126,6 +154,8 @@ export default function TablesPage() {
     } catch (error) {
       console.error('Error fetching tables:', error)
       setConnectionError(true)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -173,7 +203,7 @@ export default function TablesPage() {
   }
 
   const handleAddItems = (table) => {
-    // Navigate to create bill page with table info
+    // Navigate first (instant), then close modal so there's no blocking state update before push
     router.push(`/billing/create?tableId=${table.id}&tableName=${table.name}&section=${table.section}`)
     setIsActionModalOpen(false)
   }
@@ -336,6 +366,10 @@ export default function TablesPage() {
     }
   }
 
+
+  if (isLoading) {
+    return <TablesSkeleton />
+  }
 
   return (
     <AuthGuard>
@@ -679,6 +713,60 @@ export default function TablesPage() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+    </AuthGuard>
+  )
+}
+
+function TablesSkeleton() {
+  return (
+    <AuthGuard>
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
+          <Sidebar />
+        </aside>
+
+        <div className="flex flex-1 flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+
+          <main className="flex-1 overflow-y-auto bg-white p-4 animate-pulse">
+            {/* Header Skeleton */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="h-8 w-32 bg-gray-200 rounded-md"></div>
+              <div className="flex gap-2">
+                <div className="h-10 w-24 bg-gray-200 rounded-lg"></div>
+                <div className="h-10 w-28 bg-blue-200 rounded-lg"></div>
+              </div>
+            </div>
+
+            {/* Legend Skeleton */}
+            <div className="flex items-center justify-center mb-6 space-x-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Table Sections Skeleton */}
+            <div className="space-y-6">
+              {['Hall', 'Seperate', 'Outside'].map((sec) => (
+                <div key={sec} className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
+                  <div className="h-5 w-24 bg-gray-300 rounded"></div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {[1, 2, 3, 4, 5, 6].map((idx) => (
+                      <div key={idx} className="h-24 w-32 bg-gray-200 rounded-xl"></div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </main>
+        </div>
       </div>
     </AuthGuard>
   )

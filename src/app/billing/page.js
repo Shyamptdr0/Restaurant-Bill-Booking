@@ -359,15 +359,17 @@ function BillingPageContent() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
 
-        <div className="flex flex-1 flex-col min-w-0">
-          <Navbar />
+        <div className="flex flex-1 flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
 
-          <main className="flex-1 overflow-auto bg-white">
+          <main className="flex-1 overflow-y-auto bg-white">
             <div className="p-4">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">

@@ -255,12 +255,14 @@ export default function PrintBill() {
   if (loading) {
     return (
       <AuthGuard>
-        <div className="flex h-screen">
-          <Sidebar />
+        <div className="flex h-screen bg-gray-50">
+          <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+            <Sidebar />
+          </div>
           <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs text-gray-500 font-medium">Loading bill data...</p>
             </div>
           </div>
         </div>
@@ -334,11 +336,13 @@ export default function PrintBill() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100 relative">
+      <div className="flex h-screen bg-gray-100 overflow-hidden relative">
           <Sidebar />
-          <div className="flex-1 flex flex-col">
-            <Navbar />
-            <main className="flex-1 p-6 overflow-auto">
+          <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+            <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+              <Navbar />
+            </header>
+            <main className="flex-1 p-6 overflow-y-auto">
               {/* Control Buttons - Hidden when printing */}
               <div className="no-print mb-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

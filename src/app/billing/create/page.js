@@ -14,7 +14,6 @@ import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
 import { ArrowLeft, Plus, Minus, Search, Trash2, Receipt, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
-import { useRealtimeItemsSync } from '@/hooks/useWebSocket'
 
 function CreateBillContent() {
   const searchParams = useSearchParams()
@@ -22,48 +21,88 @@ function CreateBillContent() {
   const tableName = searchParams.get('tableName')
   const section = searchParams.get('section')
   
-  const [menuItems, setMenuItems] = useState([])
+  const [menuItems, setMenuItems] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {}
+    }
+    return []
+  })
   const [filteredItems, setFilteredItems] = useState([])
-  const [cart, setCart] = useState([])
+  const [cart, setCart] = useState(() => {
+    if (typeof window !== 'undefined' && tableId) {
+      try {
+        const cached = sessionStorage.getItem(`temp_items_${tableId}`)
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map(item => ({
+              id: item.item_id || item.id,
+              name: item.item_name || item.name,
+              category: item.item_category || item.category,
+              price: item.price,
+              quantity: item.quantity,
+              cartId: item.item_id || item.id
+            }))
+          }
+        }
+      } catch (e) {}
+    }
+    return []
+  })
+  const userModifiedCart = useRef(false)
+  const lastLoadedTableId = useRef(null)
   const [existingBill, setExistingBill] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
-  const [categories, setCategories] = useState([])
+  const [categories, setCategories] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return [...new Set(parsed.map(item => item.category).filter(Boolean))]
+          }
+        }
+      } catch (e) {}
+    }
+    return []
+  })
   const [paymentType, setPaymentType] = useState('cash')
   const [loading, setLoading] = useState(false)
-  const [loadingItems, setLoadingItems] = useState(true)
+  const [loadingItems, setLoadingItems] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached && JSON.parse(cached)?.length > 0) return false
+      } catch (e) {}
+    }
+    return true
+  })
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const router = useRouter()
-  const syncTimeoutRef = useRef(null)
-  const lastLocalUpdateRef = useRef(0)
-  const isSyncingRef = useRef(false)
 
   useEffect(() => {
-    return () => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
+    try {
+      router.prefetch('/tables')
+    } catch (e) {}
     fetchMenuItems()
-    setCart([]) // Reset cart state when tableId changes to prevent leaking items from previous table/bill
     
-    let intervalId;
-    if (tableId) {
-      fetchTemporaryItems()
-      // Auto-refresh temporary items every 4 seconds when active
-      intervalId = setInterval(() => {
-        if (typeof document !== 'undefined' && document.hidden) return
+    // Only fetch for a new tableId, never wipe active cart on component re-renders
+    if (lastLoadedTableId.current !== tableId) {
+      lastLoadedTableId.current = tableId
+      userModifiedCart.current = false
+      if (tableId) {
         fetchTemporaryItems()
-      }, 4000)
-    } else {
-      setCart([])
-    }
-    
-    return () => {
-      if (intervalId) clearInterval(intervalId)
+      } else {
+        setCart([])
+      }
     }
   }, [tableId])
 
@@ -71,41 +110,27 @@ function CreateBillContent() {
     filterItems()
   }, [menuItems, searchTerm, categoryFilter])
 
-  // Real-time synchronization - temporarily disabled to fix duplicate issues
-  // useRealtimeItemsSync(tableId, (updatedItems) => {
-  //   // Only update cart if it's not a local update (to prevent interference)
-  //   if (!isLocalUpdate) {
-  //     setCart(updatedItems)
-  //   }
-  // })
-
   const fetchTemporaryItems = async () => {
-    // Skip fetch entirely if we are in the middle of a sync or a local update debounce
-    if (isSyncingRef.current || syncTimeoutRef.current) return
-
-    const fetchStartTime = Date.now()
+    if (!tableId) return
     try {
-      const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${fetchStartTime}`)
+      const response = await fetch(`/api/temporary-items?table_id=${tableId}&_t=${Date.now()}`)
       if (response.ok) {
         const data = await response.json()
         
-        // Final check: if a local update happened while fetching, or a sync started, discard results
-        if (lastLocalUpdateRef.current > fetchStartTime || isSyncingRef.current || syncTimeoutRef.current) {
+        // If user already started adding/editing items locally, NEVER overwrite their cart!
+        if (userModifiedCart.current) {
           return
         }
 
         if (data.data && data.data.length > 0) {
-          // Group items by item_id to handle potential duplicates
           const groupedItems = {}
           data.data.forEach(item => {
             const itemId = item.item_id
             if (groupedItems[itemId]) {
-              // If item already exists (transient duplicate), take the highest quantity to prevent artificial inflation
               groupedItems[itemId].quantity = Math.max(groupedItems[itemId].quantity, item.quantity)
             } else {
-              // Create new item entry with unique identifier
               groupedItems[itemId] = {
-                cartId: itemId, // Stable cartId
+                cartId: itemId,
                 id: item.item_id,
                 name: item.item_name,
                 category: item.item_category,
@@ -114,17 +139,13 @@ function CreateBillContent() {
               }
             }
           })
-          
-          setCart(Object.values(groupedItems))
-        } else {
-          setCart([]) // Clear cart if no temporary items found in DB
+          if (!userModifiedCart.current) {
+            setCart(Object.values(groupedItems))
+          }
         }
-      } else {
-        setCart([]) // Clear cart on API error response
       }
     } catch (error) {
       console.error('Error fetching temporary items:', error)
-      setCart([]) // Clear cart on exception
     }
   }
 
@@ -195,114 +216,43 @@ function CreateBillContent() {
   }
 
   const addToCart = (item) => {
-    lastLocalUpdateRef.current = Date.now()
-    setCart(currentCart => {
-      const existingItem = currentCart.find(cartItem => String(cartItem.id) === String(item.id))
-      let newCart
-      
-      if (existingItem) {
-        // Update existing item quantity, keep the same cartId
-        newCart = currentCart.map(cartItem =>
-          String(cartItem.id) === String(item.id)
-            ? { ...cartItem, quantity: cartItem.quantity + 1 }
-            : cartItem
-        )
-      } else {
-        // Add new item with stable cartId
-        newCart = [...currentCart, { 
-          ...item, 
-          quantity: 1,
-          cartId: item.id // Stable cartId
-        }]
-      }
-      
-      // Sync the updated cart to the database
-      syncToDatabase(newCart)
-      return newCart
-    })
+    userModifiedCart.current = true
+    const existingIndex = cart.findIndex(cartItem => String(cartItem.id) === String(item.id))
+    let newCart
+    
+    if (existingIndex > -1) {
+      newCart = cart.map((cartItem, idx) =>
+        idx === existingIndex
+          ? { ...cartItem, quantity: cartItem.quantity + 1 }
+          : cartItem
+      )
+    } else {
+      newCart = [...cart, { 
+        ...item, 
+        quantity: 1,
+        cartId: item.id
+      }]
+    }
+    
+    setCart(newCart)
   }
 
   const updateQuantity = (itemId, newQuantity) => {
-    lastLocalUpdateRef.current = Date.now()
+    userModifiedCart.current = true
     if (newQuantity <= 0) {
       removeFromCart(itemId)
     } else {
-      setCart(currentCart => {
-        const newCart = currentCart.map(item =>
-          String(item.id) === String(itemId) ? { ...item, quantity: newQuantity } : item
-        )
-        syncToDatabase(newCart)
-        return newCart
-      })
+      const newCart = cart.map(item =>
+        String(item.id) === String(itemId) ? { ...item, quantity: newQuantity } : item
+      )
+      setCart(newCart)
     }
   }
 
   const removeFromCart = (itemId) => {
-    lastLocalUpdateRef.current = Date.now()
-    setCart(currentCart => {
-      const newCart = currentCart.filter(item => String(item.id) !== String(itemId))
-      syncToDatabase(newCart)
-      return newCart
-    })
-  }
-
-  const syncToDatabase = (cartItems) => {
-    if (!tableId) return
-    
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current)
-    }
-    
-    isSyncingRef.current = true
-    
-    syncTimeoutRef.current = setTimeout(async () => {
-      try {
-        const response = await fetch('/api/temporary-items', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            table_id: tableId,
-            table_name: tableName,
-            section: section,
-            items: cartItems.map(item => ({
-              id: item.id,
-              name: item.name,
-              category: item.category,
-              price: item.price,
-              quantity: item.quantity
-            }))
-          })
-        })
-        
-        if (!response.ok) {
-          console.error('Failed to sync items to database')
-        }
-
-        // If the cart is empty, update the table status to blank so it doesn't stay running
-        if (cartItems.length === 0) {
-          await fetch(`/api/tables/${tableId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: tableName,
-              section: section,
-              status: 'blank'
-            })
-          })
-        }
-      } catch (error) {
-        console.error('Error syncing items:', error)
-      } finally {
-        // Clear the ref so background polling can resume
-        syncTimeoutRef.current = null
-        // Keep syncing flag true for a short duration to prevent race conditions with incoming GET requests
-        setTimeout(() => {
-          if (!syncTimeoutRef.current) {
-            isSyncingRef.current = false
-          }
-        }, 1000)
-      }
-    }, 300) // 300ms debounce
+    userModifiedCart.current = true
+    const newCart = cart.filter(item => String(item.id) !== String(itemId))
+    setCart(newCart)
   }
 
   // Helper function to round up to next integer
@@ -401,6 +351,12 @@ function CreateBillContent() {
       })
 
       // Navigate back to tables
+      if (typeof window !== 'undefined' && tableId) {
+        sessionStorage.removeItem(`pending_running_${tableId}`)
+        sessionStorage.removeItem(`temp_items_${tableId}`)
+      }
+      userModifiedCart.current = false
+      setCart([])
       router.push('/tables')
     } catch (error) {
       console.error('Error resetting table:', error)
@@ -411,95 +367,79 @@ function CreateBillContent() {
     }
   }
 
-  const saveItems = async () => {
+  const saveItems = () => {
     if (cart.length === 0) {
       alert('Please add items to save')
       return
     }
 
-    setLoading(true)
-    
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current)
+    // 1. Instantly update local caches for 0ms perceived latency
+    if (typeof window !== 'undefined' && tableId) {
+      try {
+        const cached = localStorage.getItem('cached_tables')
+        if (cached) {
+          const tablesList = JSON.parse(cached)
+          const updatedList = tablesList.map(t =>
+            String(t.id) === String(tableId) ? { ...t, status: 'running' } : t
+          )
+          localStorage.setItem('cached_tables', JSON.stringify(updatedList))
+        }
+
+        // Cache items for instant 0ms loading in print preview
+        const formattedItems = cart.map(item => ({
+          item_id: item.id,
+          item_name: item.name,
+          item_category: item.category,
+          price: item.price,
+          quantity: item.quantity,
+          total: item.price * item.quantity
+        }))
+        sessionStorage.setItem(`pending_running_${tableId}`, String(Date.now()))
+        sessionStorage.setItem(`temp_items_${tableId}`, JSON.stringify(formattedItems))
+      } catch (e) {
+        console.warn('Cache update warning:', e)
+      }
     }
 
-    try {
-      // Save items to temporary storage in database
-      const response = await fetch('/api/temporary-items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          table_id: tableId,
-          table_name: tableName,
-          section: section,
-          items: cart.map(item => ({
-            id: item.id,
-            name: item.name,
-            category: item.category,
-            price: item.price,
-            quantity: item.quantity
-          }))
-        })
+    // 2. Fire-and-forget background sync with keepalive: browser finishes write even after navigation
+    fetch('/api/temporary-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        table_id: tableId,
+        table_name: tableName,
+        section: section,
+        update_table_status: 'running',
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          price: item.price,
+          quantity: item.quantity
+        }))
       })
-      
-      if (!response.ok) {
-        throw new Error('Failed to save items to database')
-      }
-      
-      // Update table status to running if we have a tableId
-      if (tableId) {
-        await fetch(`/api/tables/${tableId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: tableName,
-            section: section,
-            status: 'running'
-          }),
-        })
-      }
-      
-      console.log('Items saved to temporary storage')
-      
-      // Navigate back to tables
-      router.push('/tables')
-    } catch (error) {
-      console.error('Error saving items:', error)
-      alert('Error saving items: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+    }).catch(error => {
+      console.error('Background temporary items sync error:', error)
+    })
 
-  if (loadingItems) {
-    return (
-      <AuthGuard>
-        <div className="flex h-screen">
-          <Sidebar />
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
-            </div>
-          </div>
-        </div>
-      </AuthGuard>
-    )
+    // 3. Navigate instantly back to tables (NO 3-4s wait!)
+    router.push('/tables')
   }
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
         
-        <div className="flex-1 flex flex-col min-w-0">
-          <Navbar />
-          <main className="flex-1 p-4 lg:p-6 overflow-auto">
+        <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+          <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
             <div className="mb-4 lg:mb-6">
               <div className="flex items-center justify-between mb-2">
                 <Link href="/tables" className="flex items-center text-gray-600 hover:text-gray-900">
@@ -570,7 +510,12 @@ function CreateBillContent() {
 
                     {/* Menu Items Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 max-h-96 overflow-y-auto">
-                      {filteredItems.length === 0 ? (
+                      {loadingItems ? (
+                        <div className="col-span-full flex flex-col items-center justify-center py-12">
+                          <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                          <p className="text-xs text-gray-500 font-medium">Loading menu...</p>
+                        </div>
+                      ) : filteredItems.length === 0 ? (
                         <div className="col-span-2 text-center py-8">
                           <p className="text-gray-500">No menu items found</p>
                         </div>
@@ -608,9 +553,9 @@ function CreateBillContent() {
               {/* Bill Summary Section */}
               <div className="min-h-[600px] w-[450px] ">
                 <Card className="h-full">
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <CardTitle>Bill Summary</CardTitle>
-                    <CardDescription>Review and generate bill</CardDescription>
+                    <CardDescription>Review and save order items</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {cart.length === 0 ? (
@@ -682,14 +627,16 @@ function CreateBillContent() {
                           </div>
                         </div>
 
-                        {/* Save Items Button */}
-                        <Button
-                          onClick={saveItems}
-                          disabled={loading || cart.length === 0}
-                          className="w-full"
-                        >
-                          {loading ? 'Saving...' : 'Save Items'}
-                        </Button>
+                        {/* Action Buttons */}
+                        <div className="pt-2">
+                          <Button
+                            onClick={saveItems}
+                            disabled={cart.length === 0}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 cursor-pointer shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
+                          >
+                            Save Items
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </CardContent>

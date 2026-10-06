@@ -233,6 +233,12 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboardData(true)
     setCurrentDate(new Date())
+
+    const handleAppRefresh = () => {
+      fetchDashboardData(false)
+    }
+    window.addEventListener('app:refresh-data', handleAppRefresh)
+    return () => window.removeEventListener('app:refresh-data', handleAppRefresh)
   }, [])
 
   // Refetch when month changes (without showing full-screen spinner)
@@ -406,21 +412,37 @@ export default function Dashboard() {
 
       if (navigator.onLine) {
         try {
-          const [dashboardResponse, monthlyResponse, topSellingResponse, calendarStatusResponse, menuItemsResponse] = await Promise.all([
-            fetch('/api/dashboard'),
-            fetch(`/api/monthly-stats?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`),
-            fetch(`/api/top-selling?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}&limit=5`),
-            fetch(`/api/calendar-status?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`),
-            fetch('/api/menu-items')
-          ])
+          // Consolidated 1-call dashboard summary endpoint
+          const summaryResponse = await fetch(`/api/dashboard/summary?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`)
+          if (summaryResponse.ok) {
+            const summaryData = await summaryResponse.json()
+            serverData.dashboard = summaryData.dashboard
+            serverData.monthly = summaryData.monthly
+            serverData.topSelling = summaryData.topSelling
+            serverData.calendar = summaryData.calendar
+            menuItemsData = summaryData.menuItems
+          } else {
+            throw new Error('Summary fetch failed, falling back to individual endpoints')
+          }
+        } catch (summaryErr) {
+          console.warn('Summary fetch failed, using fallback:', summaryErr)
+          try {
+            const [dashboardResponse, monthlyResponse, topSellingResponse, calendarStatusResponse, menuItemsResponse] = await Promise.all([
+              fetch('/api/dashboard'),
+              fetch(`/api/monthly-stats?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`),
+              fetch(`/api/top-selling?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}&limit=5`),
+              fetch(`/api/calendar-status?month=${monthStr}&startDate=${encodeURIComponent(startDateIso)}&endDate=${encodeURIComponent(endDateIso)}`),
+              fetch('/api/menu-items')
+            ])
 
-          serverData.dashboard = await dashboardResponse.json()
-          serverData.monthly = await monthlyResponse.json()
-          serverData.topSelling = await topSellingResponse.json()
-          serverData.calendar = await calendarStatusResponse.json()
-          menuItemsData = await menuItemsResponse.json()
-        } catch (error) {
-          console.warn('Failed to fetch server data:', error)
+            serverData.dashboard = await dashboardResponse.json()
+            serverData.monthly = await monthlyResponse.json()
+            serverData.topSelling = await topSellingResponse.json()
+            serverData.calendar = await calendarStatusResponse.json()
+            menuItemsData = await menuItemsResponse.json()
+          } catch (error) {
+            console.warn('Failed to fetch server data:', error)
+          }
         }
       }
 
@@ -850,16 +872,18 @@ export default function Dashboard() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
 
-        <div className="flex flex-1 flex-col min-w-0">
-          <Navbar />
+        <div className="flex flex-1 flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
 
-          <main className="flex-1 overflow-auto p-4 lg:p-6 space-y-6 lg:space-y-8">
+          <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 lg:space-y-8">
             {/* HEADER */}
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               {/* LEFT */}

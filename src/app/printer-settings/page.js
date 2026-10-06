@@ -166,10 +166,12 @@ export default function PrinterSettingsPage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <Navbar />
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
           <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
             <div className="max-w-6xl mx-auto space-y-6">
               

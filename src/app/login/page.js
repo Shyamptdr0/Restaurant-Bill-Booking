@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,17 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const session = sessionStorage.getItem('supabase_session')
+        if (session && JSON.parse(session)?.access_token) {
+          router.replace('/tables')
+        }
+      } catch (e) {}
+    }
+  }, [router])
 
   const handleLogin = async (e) => {
     e.preventDefault()

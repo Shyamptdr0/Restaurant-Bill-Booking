@@ -15,19 +15,39 @@ import Link from 'next/link'
 import { formatPaymentType } from '@/lib/utils'
 
 export default function PrintFromTemporary() {
-  const [temporaryItems, setTemporaryItems] = useState([])
-  const [bill, setBill] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [isPrinting, setIsPrinting] = useState(false)
-  const [printSettings, setPrintSettings] = useState({})
-  const [showCustomize, setShowCustomize] = useState(false)
-  const [tempSettings, setTempSettings] = useState({})
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
   const tableId = params.tableId
   const tableName = searchParams.get('tableName')
   const section = searchParams.get('section')
+
+  const [temporaryItems, setTemporaryItems] = useState(() => {
+    if (typeof window !== 'undefined' && tableId) {
+      try {
+        const cached = sessionStorage.getItem(`temp_items_${tableId}`)
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {}
+    }
+    return []
+  })
+  const [bill, setBill] = useState(null)
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined' && tableId) {
+      try {
+        const cached = sessionStorage.getItem(`temp_items_${tableId}`)
+        if (cached && JSON.parse(cached)?.length > 0) return false
+      } catch (e) {}
+    }
+    return true
+  })
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [printSettings, setPrintSettings] = useState({})
+  const [showCustomize, setShowCustomize] = useState(false)
+  const [tempSettings, setTempSettings] = useState({})
 
   useEffect(() => {
     fetchTemporaryItems()
@@ -98,14 +118,20 @@ export default function PrintFromTemporary() {
       }
 
       if (data.data && data.data.length > 0) {
-        setTemporaryItems(groupItems(data.data))
-      } else {
+        const grouped = groupItems(data.data)
+        setTemporaryItems(grouped)
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(`temp_items_${tableId}`, JSON.stringify(grouped))
+        }
+      } else if (temporaryItems.length === 0) {
         throw new Error('No temporary items found for this table')
       }
     } catch (error) {
       console.error('Error fetching temporary items:', error)
-      alert('Error loading temporary items: ' + error.message)
-      router.push('/tables')
+      if (temporaryItems.length === 0) {
+        alert('Error loading temporary items: ' + error.message)
+        router.push('/tables')
+      }
     } finally {
       setLoading(false)
     }
@@ -121,8 +147,8 @@ export default function PrintFromTemporary() {
       // Calculate totals
       const subtotal = temporaryItems.reduce((sum, item) => sum + item.total, 0)
       
-      // Create final bill
-      const billResponse = await fetch('/api/bills', {
+      // Create final bill atomically via single finalize endpoint
+      const billResponse = await fetch('/api/bills/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -156,23 +182,7 @@ export default function PrintFromTemporary() {
       }
       setBill(finalBillData)
 
-      // Update table status to printed and Clear temporary items in background (don't await)
-      Promise.all([
-        fetch(`/api/tables/${tableId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: tableName,
-            section: section,
-            status: 'printed'
-          })
-        }),
-        fetch(`/api/temporary-items?table_id=${tableId}`, {
-          method: 'DELETE'
-        })
-      ]).catch(err => console.error('Background updates failed:', err))
-
-      return billResult.data
+      return finalBillData
     } catch (error) {
       console.error('Error creating final bill:', error)
       alert('Error creating bill: ' + error.message)
@@ -248,12 +258,14 @@ export default function PrintFromTemporary() {
   if (loading) {
     return (
       <AuthGuard>
-        <div className="flex h-screen">
-          <Sidebar />
+        <div className="flex h-screen bg-gray-50">
+          <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+            <Sidebar />
+          </div>
           <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs text-gray-500 font-medium">Preparing bill...</p>
             </div>
           </div>
         </div>
@@ -337,11 +349,13 @@ export default function PrintFromTemporary() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
         <Sidebar />
-        <div className="flex-1 flex flex-col">
-          <Navbar />
-          <main className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+          <main className="flex-1 p-6 overflow-y-auto">
             {/* Control Buttons - Hidden when printing */}
             <div className="no-print mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { ArrowLeft, Search, Eye, EyeOff, Printer, Calendar, IndianRupee, Trash2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Search, Eye, EyeOff, Printer, Calendar, IndianRupee, Trash2, AlertTriangle, Loader2 } from 'lucide-react'
 import { Field, FieldLabel } from '@/components/ui/field'
 import {
   Pagination,
@@ -45,6 +45,7 @@ export default function BillHistory() {
   const [loading, setLoading] = useState(true)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [billToDelete, setBillToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [stats, setStats] = useState({
     totalBills: 0,
     totalRevenue: 0,
@@ -97,7 +98,13 @@ export default function BillHistory() {
 
   useEffect(() => {
     fetchBills()
-  }, [])
+
+    const handleAppRefresh = () => {
+      fetchBills()
+    }
+    window.addEventListener('app:refresh-data', handleAppRefresh)
+    return () => window.removeEventListener('app:refresh-data', handleAppRefresh)
+  }, [fetchBills])
 
   // Refresh bills when page gains focus (useful after printing)
   useEffect(() => {
@@ -271,42 +278,50 @@ export default function BillHistory() {
   }
 
   const confirmDelete = async () => {
-    if (billToDelete) {
-      try {
-        const response = await fetch(`/api/bills/${billToDelete.id}`, {
-          method: 'DELETE',
-        })
-        
-        if (response.ok) {
-          // Refresh the bills list
-          fetchBills()
-          import('sonner').then(({ toast }) => {
-            toast.success(`Bill #${billToDelete.no} deleted`, {
-              position: 'top-center'
-            })
+    if (!billToDelete) return
+    setIsDeleting(true)
+    const targetBill = billToDelete
+
+    try {
+      const response = await fetch(`/api/bills/${targetBill.id}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        // Optimistically remove from state for instant UI feedback
+        setBills(prev => prev.filter(b => b.id !== targetBill.id))
+        setFilteredBills(prev => prev.filter(b => b.id !== targetBill.id))
+
+        import('sonner').then(({ toast }) => {
+          toast.success(`Bill #${targetBill.no} deleted`, {
+            position: 'top-center'
           })
-        } else {
-          alert('Failed to delete bill. Please try again.')
-        }
-      } catch (error) {
-        console.error('Error deleting bill:', error)
-        alert('Error deleting bill: ' + error.message)
-      } finally {
-        setIsDeleteConfirmOpen(false)
-        setBillToDelete(null)
+        })
+        fetchBills()
+      } else {
+        alert('Failed to delete bill. Please try again.')
       }
+    } catch (error) {
+      console.error('Error deleting bill:', error)
+      alert('Error deleting bill: ' + error.message)
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteConfirmOpen(false)
+      setBillToDelete(null)
     }
   }
 
   if (loading) {
     return (
       <AuthGuard>
-        <div className="flex h-screen">
-          <Sidebar />
+        <div className="flex h-screen bg-gray-50">
+          <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+            <Sidebar />
+          </div>
           <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs text-gray-500 font-medium">Loading history...</p>
             </div>
           </div>
         </div>
@@ -319,15 +334,17 @@ export default function BillHistory() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
         
-        <div className="flex-1 flex flex-col min-w-0">
-          <Navbar />
-          <main className="flex-1 p-4 lg:p-6 overflow-auto">
+        <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+          <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
             <div className="mb-4 lg:mb-6">
               <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900 mb-2">
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -494,7 +511,10 @@ export default function BillHistory() {
                         </TableHeader>
                         <TableBody>
                           {paginatedBills.map((bill) => (
-                            <TableRow key={bill.id}>
+                            <TableRow 
+                              key={bill.id}
+                              className={`transition-opacity ${isDeleting && billToDelete?.id === bill.id ? 'opacity-40 pointer-events-none' : ''}`}
+                            >
                               <TableCell className="font-medium whitespace-nowrap">#{bill.bill_no}</TableCell>
                               <TableCell className="whitespace-nowrap">
                                 {new Date(bill.created_at).toLocaleDateString()}
@@ -535,10 +555,21 @@ export default function BillHistory() {
                                 <Button
                                   size="sm"
                                   variant="destructive"
+                                  disabled={isDeleting && billToDelete?.id === bill.id}
                                   onClick={() => handleDelete(bill.id, bill.bill_no)}
+                                  className="flex items-center min-w-[85px] justify-center"
                                 >
-                                  <Trash2 className="h-4 w-4 mr-1" />
-                                  Delete
+                                  {isDeleting && billToDelete?.id === bill.id ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                      <span>Deleting...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      <span>Delete</span>
+                                    </>
+                                  )}
                                 </Button>
                               </div>
                             </TableCell>
@@ -560,31 +591,51 @@ export default function BillHistory() {
         </div>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-          <DialogContent className="sm:max-w-[350px] border-0 shadow-xl">
+        <Dialog 
+          open={isDeleteConfirmOpen} 
+          onOpenChange={(open) => {
+            if (!isDeleting) setIsDeleteConfirmOpen(open)
+          }}
+        >
+          <DialogContent className="sm:max-w-[380px] border-0 shadow-2xl rounded-2xl p-6">
             <DialogHeader>
-              <DialogTitle className="text-lg font-semibold text-gray-800">
+              <DialogTitle className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </div>
                 Delete Bill Confirmation
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-gray-700">
-                Are you sure you want to delete Bill #{billToDelete?.no}? This action cannot be undone.
+            <div className="space-y-4 pt-2">
+              <p className="text-sm text-gray-600">
+                Are you sure you want to delete <span className="font-semibold text-gray-900">Bill #{billToDelete?.no}</span>? This action cannot be undone.
               </p>
               
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <Button 
                   variant="outline" 
                   onClick={() => setIsDeleteConfirmOpen(false)}
-                  className="flex-1"
+                  disabled={isDeleting}
+                  className="flex-1 border-gray-300"
                 >
                   Cancel
                 </Button>
                 <Button 
                   onClick={confirmDelete}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={isDeleting}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
-                  Delete Bill
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="animate-pulse">Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Bill</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

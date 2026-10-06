@@ -18,11 +18,38 @@ export default function MenuList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return [...new Set(parsed.map(item => item.category).filter(Boolean))]
+          }
+        }
+      } catch (e) {}
+    }
+    return []
+  })
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached && JSON.parse(cached)?.length > 0) return false
+      } catch (e) {}
+    }
+    return true
+  })
 
   useEffect(() => {
     fetchMenuItems()
+
+    const handleAppRefresh = () => {
+      fetchMenuItems()
+    }
+    window.addEventListener('app:refresh-data', handleAppRefresh)
+    return () => window.removeEventListener('app:refresh-data', handleAppRefresh)
   }, [])
 
   useEffect(() => {
@@ -33,14 +60,18 @@ export default function MenuList() {
     try {
       const response = await fetch('/api/menu-items')
       const result = await response.json()
-      setMenuItems(result.data || [])
+      const data = result.data || []
+      setMenuItems(data)
       
       // Extract unique categories
-      const uniqueCategories = [...new Set(result.data?.map(item => item.category) || [])]
+      const uniqueCategories = [...new Set(data.map(item => item.category).filter(Boolean))]
       setCategories(uniqueCategories)
+      if (typeof window !== 'undefined' && data.length > 0) {
+        localStorage.setItem('cached_menu_items', JSON.stringify(data))
+      }
     } catch (error) {
       console.error('Error fetching menu items:', error)
-      setMenuItems([])
+      if (menuItems.length === 0) setMenuItems([])
     } finally {
       setLoading(false)
     }
@@ -120,12 +151,14 @@ export default function MenuList() {
   if (loading) {
     return (
       <AuthGuard>
-        <div className="flex h-screen">
-          <Sidebar />
+        <div className="flex h-screen bg-gray-50">
+          <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
+            <Sidebar />
+          </div>
           <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs text-gray-500 font-medium">Loading menu list...</p>
             </div>
           </div>
         </div>
@@ -135,15 +168,17 @@ export default function MenuList() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
 
-        <div className="flex flex-1 flex-col min-w-0">
-          <Navbar />
-          <main className="flex-1 p-4 lg:p-6 overflow-auto">
+        <div className="flex flex-1 flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+          <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
                 <div>

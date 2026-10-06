@@ -14,14 +14,46 @@ import { Navbar } from '@/components/navbar'
 import { Plus, Minus, Search, Trash2, Receipt, Printer } from 'lucide-react'
 
 function ParcelBillContent() {
-  const [menuItems, setMenuItems] = useState([])
+  const [menuItems, setMenuItems] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {}
+    }
+    return []
+  })
   const [filteredItems, setFilteredItems] = useState([])
   const [cart, setCart] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
-  const [categories, setCategories] = useState([])
-    const [loading, setLoading] = useState(false)
-  const [loadingItems, setLoadingItems] = useState(true)
+  const [categories, setCategories] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return [...new Set(parsed.map(item => item.category).filter(Boolean))]
+          }
+        }
+      } catch (e) {}
+    }
+    return []
+  })
+  const [loading, setLoading] = useState(false)
+  const [loadingItems, setLoadingItems] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_menu_items')
+        if (cached && JSON.parse(cached)?.length > 0) return false
+      } catch (e) {}
+    }
+    return true
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -166,8 +198,8 @@ function ParcelBillContent() {
         status: 'completed'
       }
 
-      // Create the bill
-      const response = await fetch('/api/bills', {
+      // Create the bill atomically
+      const response = await fetch('/api/bills/finalize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -192,33 +224,19 @@ function ParcelBillContent() {
     }
   }
 
-  if (loadingItems) {
-    return (
-      <AuthGuard>
-        <div className="flex h-screen">
-          <Sidebar />
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-4">
-              <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-16 w-auto animate-pulse" />
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600"></div>
-            </div>
-          </div>
-        </div>
-      </AuthGuard>
-    )
-  }
-
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
         
-        <div className="flex-1 flex flex-col min-w-0">
-          <Navbar />
-          <main className="flex-1 p-4 lg:p-6 overflow-auto">
+        <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
+          <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
             <div className="mb-4 lg:mb-6">
               <div>
                 <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
@@ -272,7 +290,12 @@ function ParcelBillContent() {
 
                     {/* Menu Items Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 max-h-96 overflow-y-auto">
-                      {filteredItems.length === 0 ? (
+                      {loadingItems ? (
+                        <div className="col-span-full flex flex-col items-center justify-center py-12">
+                          <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                          <p className="text-xs text-gray-500 font-medium">Loading menu...</p>
+                        </div>
+                      ) : filteredItems.length === 0 ? (
                         <div className="col-span-2 text-center py-8">
                           <p className="text-gray-500">No menu items found</p>
                         </div>

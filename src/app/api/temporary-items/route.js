@@ -59,7 +59,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { table_id, table_name, section, items } = body
+    const { table_id, table_name, section, items, update_table_status } = body
 
     if (!table_id) {
       return NextResponse.json({ error: 'Table ID is required' }, { status: 400 })
@@ -78,9 +78,17 @@ export async function POST(request) {
       throw deleteError
     }
 
-    // If items list is empty, return clear confirmation
+    // If items list is empty, update table status if requested and return
     if (!items || items.length === 0) {
-      return NextResponse.json({ data: [], error: null })
+      if (update_table_status) {
+        await withRetry(async () => {
+          return await supabase
+            .from('tables')
+            .update({ status: update_table_status })
+            .eq('id', table_id)
+        })
+      }
+      return NextResponse.json({ success: true, data: [], error: null })
     }
 
     // 2. Format & group items to prevent DB duplication
@@ -110,17 +118,31 @@ export async function POST(request) {
 
     const newRows = Object.values(grouped)
 
-    // 3. Insert all items in 1 batch insert
-    const { data: insertedData, error: insertError } = await withRetry(async () => {
-      return await supabase
-        .from('temporary_items')
-        .insert(newRows)
-        .select()
-    })
+    // 3. Insert items and optionally update table status in parallel (no .select() overhead)
+    const operations = [
+      withRetry(async () => {
+        return await supabase
+          .from('temporary_items')
+          .insert(newRows)
+      })
+    ]
 
-    if (insertError) throw insertError
+    if (update_table_status) {
+      operations.push(
+        withRetry(async () => {
+          return await supabase
+            .from('tables')
+            .update({ status: update_table_status })
+            .eq('id', table_id)
+        })
+      )
+    }
 
-    return NextResponse.json({ data: insertedData || [], error: null })
+    const [insertResult] = await Promise.all(operations)
+
+    if (insertResult?.error) throw insertResult.error
+
+    return NextResponse.json({ success: true, count: newRows.length, error: null })
   } catch (error) {
     console.error('POST /temporary-items error:', error)
     return NextResponse.json({ data: null, error: error.message }, { status: 500 })
@@ -142,17 +164,16 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Table ID is required' }, { status: 400 })
     }
 
-    const { data, error } = await withRetry(async () => {
+    const { error } = await withRetry(async () => {
       return await supabase
         .from('temporary_items')
         .delete()
         .eq('table_id', tableId)
-        .select()
     })
 
     if (error) throw error
 
-    return NextResponse.json({ data: data || [], error: null })
+    return NextResponse.json({ success: true, error: null })
   } catch (error) {
     return NextResponse.json({ data: null, error: error.message }, { status: 500 })
   }

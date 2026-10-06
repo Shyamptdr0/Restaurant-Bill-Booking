@@ -11,12 +11,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AuthGuard } from '@/components/auth-guard'
 import { Sidebar } from '@/components/sidebar'
 import { Navbar } from '@/components/navbar'
-import { Plus, Edit2, Trash2, Users, Utensils, Receipt, CreditCard, AlertTriangle } from 'lucide-react'
+import { Plus, Edit2, Trash2, Users, Utensils, Receipt, CreditCard, AlertTriangle, RotateCcw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 export default function TablesPage() {
   const router = useRouter()
-  const [tables, setTables] = useState([])
+  const [tables, setTables] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('cached_tables')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {}
+    }
+    return []
+  })
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isActionModalOpen, setIsActionModalOpen] = useState(false)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
@@ -24,6 +36,7 @@ export default function TablesPage() {
   const [selectedTable, setSelectedTable] = useState(null)
   const [selectedSection, setSelectedSection] = useState('')
   const [connectionError, setConnectionError] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     status: 'blank',
@@ -38,8 +51,27 @@ export default function TablesPage() {
       if (typeof document !== 'undefined' && document.hidden) return
       fetchTables()
     }, 4000)
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchTables()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     
-    return () => clearInterval(intervalId)
+    const handleAppRefresh = () => {
+      setIsRefreshing(true)
+      fetchTables().finally(() => {
+        setTimeout(() => setIsRefreshing(false), 500)
+      })
+    }
+    window.addEventListener('app:refresh-data', handleAppRefresh)
+
+    return () => {
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('app:refresh-data', handleAppRefresh)
+    }
   }, [])
 
   const fetchTables = async () => {
@@ -48,27 +80,51 @@ export default function TablesPage() {
       const response = await fetch('/api/tables')
       if (response.ok) {
         const data = await response.json()
+        let validTables = []
         // Handle both direct array and error response with tables array
         if (Array.isArray(data)) {
-          setTables(data)
+          validTables = data
         } else if (data.tables && Array.isArray(data.tables)) {
-          setTables(data.tables)
+          validTables = data.tables
           if (data.error) {
             console.warn('Database warning:', data.error)
             setConnectionError(true)
           }
         } else {
-          setTables([])
           setConnectionError(true)
+        }
+
+        if (validTables.length > 0) {
+          const now = Date.now()
+          const mergedTables = validTables.map(t => {
+            const pendingTime = typeof window !== 'undefined' ? sessionStorage.getItem(`pending_running_${t.id}`) : null
+            if (pendingTime) {
+              const elapsed = now - Number(pendingTime)
+              // Protect running status while background DB write is in-flight (up to 15s)
+              if (elapsed < 15000) {
+                if (t.status === 'running') {
+                  sessionStorage.removeItem(`pending_running_${t.id}`)
+                } else if (t.status === 'blank') {
+                  return { ...t, status: 'running' }
+                }
+              } else {
+                sessionStorage.removeItem(`pending_running_${t.id}`)
+              }
+            }
+            return t
+          })
+
+          setTables(mergedTables)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('cached_tables', JSON.stringify(mergedTables))
+          }
         }
       } else {
         console.error('Failed to fetch tables')
-        setTables([])
         setConnectionError(true)
       }
     } catch (error) {
       console.error('Error fetching tables:', error)
-      setTables([])
       setConnectionError(true)
     }
   }
@@ -140,74 +196,93 @@ export default function TablesPage() {
   }
 
   const confirmResetTable = async () => {
-    if (selectedTable) {
-      try {
-        await fetch(`/api/tables/${selectedTable.id}`, {
+    if (!selectedTable) return
+    const tableToReset = selectedTable
+
+    // 1. Optimistic UI update (0ms perceived latency)
+    setTables(prev => {
+      const updated = prev.map(t => t.id === tableToReset.id ? { ...t, status: 'blank' } : t)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cached_tables', JSON.stringify(updated))
+        sessionStorage.removeItem(`pending_running_${tableToReset.id}`)
+        sessionStorage.removeItem(`temp_items_${tableToReset.id}`)
+      }
+      return updated
+    })
+    setIsActionModalOpen(false)
+    setIsResetConfirmOpen(false)
+
+    // 2. Background database sync
+    try {
+      await Promise.all([
+        fetch(`/api/tables/${tableToReset.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: selectedTable.name,
-            section: selectedTable.section,
+            name: tableToReset.name,
+            section: tableToReset.section,
             status: 'blank'
           })
-        })
-
-        // Also clear any temporary items associated with this table
-        await fetch(`/api/temporary-items?table_id=${selectedTable.id}`, {
+        }),
+        fetch(`/api/temporary-items?table_id=${tableToReset.id}`, {
           method: 'DELETE'
         })
-
-        fetchTables()
-        setIsActionModalOpen(false)
-        setIsResetConfirmOpen(false)
-      } catch (error) {
-        console.error('Error resetting table:', error)
-      }
+      ])
+    } catch (error) {
+      console.error('Error resetting table:', error)
+      fetchTables() // Revert to server state on error
     }
   }
 
   const handleSettleBill = async () => {
-    if (selectedTable) {
-      // Find the printed bill for this table
-      try {
-        const response = await fetch(`/api/bills?table_id=${selectedTable.id}&status=printed`)
-        if (response.ok) {
-          const bills = await response.json()
-          if (bills.data && bills.data.length > 0) {
-            // Sort by most recent to get the correct bill
-            const sortedBills = bills.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            const bill = sortedBills[0]
-            
-            // Update bill status to paid
-            await fetch(`/api/bills/${bill.id}`, {
+    if (!selectedTable) return
+    const tableToSettle = selectedTable
+
+    // 1. Optimistic UI update (0ms perceived latency)
+    setTables(prev => {
+      const updated = prev.map(t => t.id === tableToSettle.id ? { ...t, status: 'blank' } : t)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cached_tables', JSON.stringify(updated))
+        sessionStorage.removeItem(`pending_running_${tableToSettle.id}`)
+        sessionStorage.removeItem(`temp_items_${tableToSettle.id}`)
+      }
+      return updated
+    })
+    setIsActionModalOpen(false)
+
+    // 2. Background database sync
+    try {
+      const response = await fetch(`/api/bills?table_id=${tableToSettle.id}&status=printed`)
+      if (response.ok) {
+        const bills = await response.json()
+        if (bills.data && bills.data.length > 0) {
+          const sortedBills = bills.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          const bill = sortedBills[0]
+          
+          await Promise.all([
+            fetch(`/api/bills/${bill.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'paid' })
-            })
-
-            // Clear temporary items from database (just in case)
-            await fetch(`/api/temporary-items?table_id=${selectedTable.id}`, {
-              method: 'DELETE'
-            })
-
-            // Update table status to paid
-            await fetch(`/api/tables/${selectedTable.id}`, {
+            }),
+            fetch(`/api/tables/${tableToSettle.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                name: selectedTable.name,
-                section: selectedTable.section,
-                status: 'paid'
+                name: tableToSettle.name,
+                section: tableToSettle.section,
+                status: 'blank'
               })
+            }),
+            fetch(`/api/temporary-items?table_id=${tableToSettle.id}`, {
+              method: 'DELETE'
             })
-
-            fetchTables()
-            setIsActionModalOpen(false)
-          }
+          ])
         }
-      } catch (error) {
-        console.error('Error settling bill:', error)
       }
+    } catch (error) {
+      console.error('Error settling bill:', error)
+      fetchTables()
     }
   }
 
@@ -264,16 +339,18 @@ export default function TablesPage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-gray-100">
-        {/* Desktop Sidebar  */}
-        <div className="hidden lg:flex h-full w-64 flex-col bg-gray-50 border-r flex-shrink-0">
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Desktop Sidebar - fixed */}
+        <aside className="hidden lg:flex h-screen w-64 flex-col bg-gray-50 border-r flex-shrink-0 z-30">
           <Sidebar />
-        </div>
+        </aside>
 
-        <div className="flex flex-1 flex-col min-w-0">
-          <Navbar />
+        <div className="flex flex-1 flex-col h-screen min-w-0 overflow-hidden">
+          <header className="sticky top-0 z-20 flex-shrink-0 bg-white">
+            <Navbar />
+          </header>
 
-          <main className="flex-1 overflow-auto bg-white">
+          <main className="flex-1 overflow-y-auto bg-white">
             <div className="p-4">
               {/* Header */}
               <div className="flex justify-between items-center mb-6">
@@ -286,13 +363,28 @@ export default function TablesPage() {
                     </div>
                   )}
                 </div>
-                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Table
-                    </Button>
-                  </DialogTrigger>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsRefreshing(true)
+                      fetchTables().finally(() => {
+                        setTimeout(() => setIsRefreshing(false), 500)
+                      })
+                    }}
+                    disabled={isRefreshing}
+                    className="text-gray-700 hover:text-blue-600 hover:border-blue-300 transition-all cursor-pointer"
+                  >
+                    <RotateCcw className={cn("h-4 w-4 mr-1.5", isRefreshing && "animate-spin text-blue-600")} />
+                    <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                  </Button>
+                  <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Table
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="sm:max-w-[450px] border-0 shadow-xl">
                     <DialogHeader>
                       <DialogTitle className="text-xl font-semibold text-gray-800">
@@ -344,8 +436,9 @@ export default function TablesPage() {
                   </DialogContent>
                 </Dialog>
               </div>
+            </div>
 
-              {/* Legend */}
+            {/* Legend */}
               <div className="flex items-center justify-center mb-6 space-x-4 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-white border-2 border-gray-300 rounded"></div>

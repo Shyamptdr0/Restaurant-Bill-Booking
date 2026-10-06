@@ -1,40 +1,6 @@
--- Execute this SQL in your Supabase SQL Editor (SQL Editor -> New Query -> Run)
+-- Migration: Atomic Finalize Bill Transaction Function
+-- Allows POS to finalize bills with 1 single atomic database call
 
--- 1. Drop existing function if parameter names differ, then recreate
-DROP FUNCTION IF EXISTS public.decrement_stock(UUID, INT);
-DROP FUNCTION IF EXISTS public.decrement_stock(UUID, INTEGER);
-
-CREATE OR REPLACE FUNCTION public.decrement_stock(inv_id UUID, amount INT)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  UPDATE public.menu_items
-  SET stock_quantity = GREATEST(0, COALESCE(stock_quantity, 0) - amount)
-  WHERE id = inv_id AND track_inventory = true;
-END;
-$$;
-
--- Grant permissions for RPC execution
-GRANT EXECUTE ON FUNCTION public.decrement_stock(UUID, INT) TO anon, authenticated, service_role;
-
-
--- 2. Database Performance Indexes
-CREATE INDEX IF NOT EXISTS idx_temporary_items_table_id ON public.temporary_items (table_id);
-CREATE INDEX IF NOT EXISTS idx_temporary_items_table_created ON public.temporary_items (table_id, created_at);
-
-CREATE INDEX IF NOT EXISTS idx_tables_status ON public.tables (status);
-CREATE INDEX IF NOT EXISTS idx_tables_created_at ON public.tables (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_bills_table_id ON public.bills (table_id);
-CREATE INDEX IF NOT EXISTS idx_bills_status ON public.bills (status);
-CREATE INDEX IF NOT EXISTS idx_bills_created_at ON public.bills (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_bill_items_bill_id ON public.bill_items (bill_id);
-CREATE INDEX IF NOT EXISTS idx_menu_items_category ON public.menu_items (category);
-
--- 3. Atomic Finalize Bill Function
 CREATE OR REPLACE FUNCTION public.finalize_bill_transaction(
   p_table_id UUID,
   p_table_name TEXT,
@@ -55,6 +21,7 @@ DECLARE
   v_bill JSONB;
   v_item RECORD;
 BEGIN
+  -- 1. Insert into bills
   INSERT INTO public.bills (
     table_id, table_name, section, subtotal, tax_amount, total_amount, payment_type, status
   ) VALUES (
@@ -62,6 +29,7 @@ BEGIN
   )
   RETURNING id INTO v_bill_id;
 
+  -- 2. Insert bill items and decrement stock
   FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS (
     id UUID,
     name TEXT,
@@ -76,14 +44,17 @@ BEGIN
       v_bill_id, v_item.id, v_item.name, v_item.category, v_item.quantity, v_item.price, (v_item.price * v_item.quantity)
     );
 
+    -- Decrement stock if track_inventory is enabled
     UPDATE public.menu_items
     SET stock_quantity = GREATEST(0, COALESCE(stock_quantity, 0) - v_item.quantity)
     WHERE id = v_item.id AND track_inventory = true;
   END LOOP;
 
+  -- 3. Clear temporary items for this table if table_id is provided
   IF p_table_id IS NOT NULL THEN
     DELETE FROM public.temporary_items WHERE table_id = p_table_id;
     
+    -- 4. Update table status
     UPDATE public.tables
     SET status = CASE WHEN p_status = 'paid' THEN 'blank' ELSE 'printed' END,
         updated_at = NOW()
@@ -96,4 +67,3 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.finalize_bill_transaction TO anon, authenticated, service_role;
-

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { LogOut, User, Clock, Menu, LayoutDashboard, Utensils, PlusCircle, IndianRupee, History, Settings, ChefHat, Table } from 'lucide-react'
+import { LogOut, User, Clock, Menu, LayoutDashboard, Utensils, PlusCircle, IndianRupee, History, Settings, ChefHat, Table, RotateCcw } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet.jsx'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -21,7 +21,18 @@ const navigation = [
 export function Navbar() {
   const [user, setUser] = useState(null)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const pathname = usePathname()
+
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app:refresh-data'))
+    }
+    setTimeout(() => {
+      setIsRefreshing(false)
+    }, 600)
+  }
 
   useEffect(() => {
     const getUser = () => {
@@ -149,7 +160,20 @@ export function Navbar() {
         <img src="/PM-logo.png" alt="ParamMitra Restaurant" className="h-15 w-auto" />
       </div>
       
-      <div className="flex items-center space-x-2 lg:space-x-4">
+      <div className="flex items-center space-x-2 lg:space-x-3">
+        <Button
+          onClick={handleRefresh}
+          variant="outline"
+          size="sm"
+          title="Refresh Data"
+          className="flex items-center space-x-1.5 flex-shrink-0 text-gray-700 hover:text-orange-600 hover:border-orange-300 transition-all cursor-pointer h-8 px-2.5"
+        >
+          <RotateCcw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin text-orange-600")} />
+          <span className="hidden sm:inline font-medium text-xs">
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </span>
+        </Button>
+        <Separator orientation="vertical" className="hidden sm:block h-6" />
         <div className="hidden sm:flex items-center space-x-2 text-sm min-w-0">
           <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
           <span className="text-gray-700 truncate max-w-24 lg:max-w-none">
